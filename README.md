@@ -235,4 +235,9 @@ above) and run with `PYTHONPATH=.` so they exercise the local checkout's source.
 
 ## License
 
-Apache License 2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+SpeakEasy is licensed under the Functional Source License 1.1 with Apache 2.0 Future License (FSL-1.1-ALv2): free to use,
+modify and share for any purpose except a Competing Use; each version becomes Apache-2.0 two years after release. The code is
+source-available under the [Fair Source](https://fair.io) model, not open source in the OSI sense. See [LICENSE](LICENSE) and
+[NOTICE](NOTICE). For commercial licensing, open an issue. "SpeakEasy" name and logo are not licensed.
+
+Contributions need a signed Contributor License Agreement; see [CONTRIBUTING.md](CONTRIBUTING.md).

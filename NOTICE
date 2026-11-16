@@ -2,7 +2,13 @@ SpeakEasy
 Copyright 2026 Xellos1010
 
 This product includes software developed by Xellos1010.
-Licensed under the Apache License, Version 2.0 (see LICENSE).
+Licensed under the Functional Source License, Version 1.1, ALv2 Future License (FSL-1.1-ALv2; see LICENSE).
+Each version of the software also becomes available under the Apache License, Version 2.0 on the second anniversary of the
+date it was made available, as stated in LICENSE.
+
+Licensing history: the initial public release candidate (commit d042606) carried the Apache License, Version 2.0. The project was
+relicensed to FSL-1.1-ALv2 on 2026-11-16, before any public release; that Apache-2.0 text is no longer the license of this
+repository.
 
 Third-party software is not redistributed in this repository. Dependencies are installed from their
 own package indexes under their own licenses. Note: on Linux, the optional dependencies pynput
