@@ -1,0 +1,3120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>speakeasy</title>
+</head>
+<body>
+<!--
+================================================================================
+ SPEAKEASY - macOS GUI FOUNDATION - DESIGN SYSTEM SPEC (SSOT for 4 track agents)
+================================================================================
+ Read this whole block before touching CSS/markup. Every rule below cites the
+ glanceable-dashboard-design principle number it satisfies. Do not invent new
+ tokens, class names, colors, radii, or motion values - reuse what's here.
+ Your screen mounts into the placeholder <div id="screen-XXXX"> for your
+ destination (see part 4). Do not touch the sidebar, shell, or Home screen.
+
+ --------------------------------------------------------------------------
+ 1. TOKENS (all defined as CSS custom properties on :root - see <style>)
+ --------------------------------------------------------------------------
+ COLOR - background layers (dark/calm aesthetic inherited from existing menu
+ bar + HUD; HUD's rgba(20,23,26,0.92) is preserved as --overlay-glass for any
+ popover/tooltip/overlay surface you add - do not reuse it for page bg):
+   --bg-0              app window base            #0f1113
+   --bg-1              sidebar                     #15181b
+   --bg-2              card / surface (default)    #1b1f23
+   --bg-3              elevated / hover surface     #22272b
+   --overlay-glass     rgba(20,23,26,0.92)  (HUD-matching glass surface only)
+   --border-subtle     rgba(255,255,255,0.08)
+   --border-strong     rgba(255,255,255,0.14)
+
+ COLOR - text:
+   --text-primary      rgba(255,255,255,0.92)
+   --text-secondary    rgba(255,255,255,0.62)
+   --text-tertiary     rgba(255,255,255,0.40)
+   --text-on-accent    #08130d   (dark text placed ON the green accent fill)
+
+ COLOR - accent (matches existing HUD meter green rgb(0.30,0.85,0.60) exactly):
+   --accent-500        #4dd999   (rgb(77,217,153) - THE brand green, use for
+                                   primary actions, active states, the one
+                                   "everything is fine" cue)
+   --accent-600        #34c082   (hover/pressed)
+   --accent-400        #7ee6b3   (on-dark text/icon accent, e.g. selected chip)
+   --accent-soft-bg    rgba(77,217,153,0.12)
+   --accent-soft-border rgba(77,217,153,0.35)
+
+ COLOR - status set (Principle 1: hue is NEVER the only signal - every status
+ pairs a position/shape difference + a symbol + a word with its color; this
+ exact 4-status vocabulary is closed, reuse it, don't add ad hoc statuses):
+   idle          --status-idle-color         #9aa3ab   symbol "●" word "Idle"
+   recording     --status-recording-color    var(--accent-500) symbol "◉" word "Recording"
+   transcribing  --status-transcribing-color #f2c14e   symbol "◐" word "Transcribing"
+   attention     --status-attention-color    #f2555a   symbol "▲" word "Needs Attention"
+   Each is rendered via the .status-chip component (symbol glyph + word text
+   always both present in the DOM, never color-only; see component list).
+
+ SPACING SCALE (4px base):
+   --space-1 4px  --space-2 8px  --space-3 12px  --space-4 16px
+   --space-5 20px --space-6 24px --space-7 32px  --space-8 48px --space-9 64px
+
+ TYPE SCALE - font stack:
+   --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                  "Helvetica Neue", Arial, sans-serif;
+   --text-h1     28px / line-height 1.2 / weight 650   (screen titles)
+   --text-h2     20px / line-height 1.3 / weight 600   (card/section titles)
+   --text-body   14px / line-height 1.5 / weight 400   (default running text)
+   --text-label  12px / line-height 1.4 / weight 600 / letter-spacing .04em /
+                 uppercase   (eyebrow labels, meta text, table headers)
+   --text-micro  11px / line-height 1.4 / weight 500   (timestamps, footnotes)
+
+ RADIUS SCALE:
+   --radius-sm 6px   (chips, small controls)
+   --radius-md 10px  (buttons, inputs)
+   --radius-lg 16px  (cards - matches HUD's own rounded-corner language)
+   --radius-xl 20px  (large panels / modals)
+   --radius-pill 999px (pill buttons, chip-rows, status chips)
+
+ MOTION TOKENS (Principle 5: every animation maps to exactly ONE real event;
+ no idle/decorative motion; every animation has a static end-state):
+   --duration-instant 100ms   --duration-fast 150ms
+   --duration-base    220ms   --duration-slow 400ms
+   --ease-standard  cubic-bezier(.4,0,.2,1)   (default for hover/press/focus)
+   --ease-decel     cubic-bezier(0,0,.2,1)    (things entering/appearing)
+   --ease-accel     cubic-bezier(.4,0,1,1)    (things leaving/dismissing)
+   Reduced motion (Principle 6): a global @media (prefers-reduced-motion:
+   reduce) rule collapses all durations to 1ms. In addition there is an
+   explicit in-app "Reduce motion" switch in the sidebar footer
+   (#reduce-motion-toggle) that adds class="reduce-motion" to <html>, which
+   does the same collapse - both mechanisms must be respected by any motion
+   you add on your screen. If you animate anything, it must (a) correspond to
+   one real event (e.g. a recording starting/stopping, a save completing,
+   a level meter reacting to live audio) and (b) end in a static state.
+
+ --------------------------------------------------------------------------
+ 2. COMPONENT CLASSES - reuse these exact names, do not rename
+ --------------------------------------------------------------------------
+ .nav-item             sidebar destination (button). Children: .nav-item__icon,
+                       .nav-item__label. States: default, :hover (bg-3),
+                       .is-active + [aria-current="page"] (accent-soft-bg bg,
+                       accent-400 left rule + text), :focus-visible (2px solid
+                       accent-500 outline, 2px offset). Fully keyboard operable:
+                       Tab reaches the nav group once, ArrowUp/ArrowDown roam
+                       between items (roving tabindex), Enter/Space activates.
+
+ .card                 base content surface. bg-2, 1px solid border-subtle,
+                       radius-lg, padding space-5. .card--elevated variant
+                       uses bg-3 (use for hover-interactive cards).
+
+ .btn-primary          ONE per screen state (Principle 2 - never a menu of
+                       equally-weighted buttons). Filled accent-500 bg,
+                       text-on-accent text, radius-pill, padding space-3
+                       space-6, weight 600. Hover → accent-600. Focus-visible →
+                       2px solid white outline + 2px offset. Transition:
+                       background var(--duration-fast) var(--ease-standard).
+
+ .btn-text             secondary / text-link action. Transparent bg, no
+                       border, color text-secondary, underline appears on
+                       hover/focus (text-decoration-color accent-500),
+                       :focus-visible gets the same outline treatment as
+                       .btn-primary. Use for "view all", "learn more", any
+                       non-primary action - never style it to compete with
+                       .btn-primary's visual weight.
+
+ .status-chip          symbol + word + color, inline-flex, gap space-2,
+                       padding space-2 space-3, radius-pill, bg =
+                       color-mix-style soft tint of the status color (12%
+                       opacity), border 1px solid the status color at 35%
+                       opacity. Structure required:
+                       <span class="status-chip status-chip--recording">
+                         <span class="status-chip__symbol" aria-hidden="true">◉</span>
+                         <span class="status-chip__word">Recording</span>
+                       </span>
+                       Always set aria-label on the outer span mirroring the
+                       visible word (ARIA parity, Principle 9) - never convey
+                       status by color/animation alone.
+
+ .chip-row / .chip     replacement for a <select>/dropdown when the option
+                       set is small (~7 or fewer, Principle 3). Container:
+                       <div class="chip-row" role="radiogroup" aria-label="…">
+                       each option: <button class="chip" role="radio"
+                       aria-checked="true|false">Label</button>. Selected
+                       state: .chip.is-selected (accent-soft-bg bg,
+                       accent-soft-border border, accent-400 text). Keyboard:
+                       ArrowLeft/ArrowRight move selection, Enter/Space
+                       commits, roving tabindex. Only fall back to a real
+                       <select> for genuinely rare/advanced settings (e.g. a
+                       long enumerated list like input sample rate options).
+
+ .placeholder-panel    empty-state mount for the 4 screens not yet designed.
+                       2px dashed border-strong, radius-lg, padding space-8,
+                       centered text-tertiary label. Already placed for you - 
+                       replace its *contents*, keep the outer #screen-* id.
+
+ .meter / .meter-bar   the 5-bar audio level meter reused verbatim from the
+                       existing floating HUD. 5x .meter-bar children, filled
+                       height driven by a --level-N (0–1) custom property per
+                       bar, fill color accent-500. Static/dim (20% opacity,
+                       no motion) when idle; only animates height while a
+                       recording event is actually live (Principle 5) - never
+                       idly pulses for decoration.
+
+ --------------------------------------------------------------------------
+ 3. LAYOUT - left sidebar (chosen over a top nav) - justification
+ --------------------------------------------------------------------------
+ Principle 1 requires status to land in top-left scan order (F/Z-pattern
+ entry point for LTR reading). A left sidebar puts the nav - and, on Home,
+ the very first status chip - at the top-left of the window, the first place
+ the eye lands, rather than competing with a top bar that would push the
+ primary status chip rightward or below a title. Principle 4 (progressive
+ disclosure) is satisfied by keeping the sidebar to exactly 5 flat
+ destinations with no nesting/accordions: Home is the "is everything fine"
+ default view; the other 4 are one click away for drill-in detail, never
+ pre-expanded, never dumped onto Home.
+
+ Shell structure (already built, do not restructure):
+   .app-shell (CSS grid: 220px sidebar + fluid main)
+     .sidebar (bg-1) → .nav-item x5 + reduce-motion toggle in footer
+     .main (bg-0) → .topbar (screen title) + .screen-content (mounts below)
+
+ --------------------------------------------------------------------------
+ 4. WHERE YOUR SCREEN MOUNTS
+ --------------------------------------------------------------------------
+   #screen-home        - DONE, fully designed below, do not edit.
+   #screen-training    - Training & Profile track agent mounts here.
+   #screen-history     - History track agent mounts here.
+   #screen-models       - Models & System track agent mounts here.
+   #screen-mics        - Mics & Speakers track agent mounts here.
+ Each is toggled visible by the sidebar nav's JS (display:none/flex swap) - 
+ already wired. Open this file, click each sidebar item, and your placeholder
+ dashed panel will appear so you can preview your own work in the real shell.
+ Replace only what's inside your .placeholder-panel; keep the outer
+ #screen-* wrapper, .screen class, and the .topbar title-swap data attribute
+ (data-title="…") on your corresponding .nav-item untouched.
+================================================================================
+-->
+<style>
+  :root {
+    color-scheme: dark;
+
+    /* background layers */
+    --bg-0: #0f1113;
+    --bg-1: #15181b;
+    --bg-2: #1b1f23;
+    --bg-3: #22272b;
+    --overlay-glass: rgba(20, 23, 26, 0.92);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+
+    /* text */
+    --text-primary: rgba(255, 255, 255, 0.92);
+    --text-secondary: rgba(255, 255, 255, 0.62);
+    --text-tertiary: rgba(255, 255, 255, 0.40);
+    --text-on-accent: #08130d;
+
+    /* accent */
+    --accent-500: #4dd999;
+    --accent-600: #34c082;
+    --accent-400: #7ee6b3;
+    --accent-soft-bg: rgba(77, 217, 153, 0.12);
+    --accent-soft-border: rgba(77, 217, 153, 0.35);
+
+    /* status set */
+    --status-idle-color: #9aa3ab;
+    --status-recording-color: var(--accent-500);
+    --status-transcribing-color: #f2c14e;
+    --status-attention-color: #f2555a;
+
+    /* spacing */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-7: 32px;
+    --space-8: 48px;
+    --space-9: 64px;
+
+    /* type */
+    --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    --text-h1: 650 28px/1.2 var(--font-family);
+    --text-h2: 600 20px/1.3 var(--font-family);
+    --text-body: 400 14px/1.5 var(--font-family);
+    --text-label: 600 12px/1.4 var(--font-family);
+    --text-micro: 500 11px/1.4 var(--font-family);
+
+    /* radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-pill: 999px;
+
+    /* motion */
+    --duration-instant: 100ms;
+    --duration-fast: 150ms;
+    --duration-base: 220ms;
+    --duration-slow: 400ms;
+    --ease-standard: cubic-bezier(.4, 0, .2, 1);
+    --ease-decel: cubic-bezier(0, 0, .2, 1);
+    --ease-accel: cubic-bezier(.4, 0, 1, 1);
+  }
+
+  html.reduce-motion *,
+  html.reduce-motion *::before,
+  html.reduce-motion *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg-0);
+    color: var(--text-primary);
+    font: var(--text-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-6);
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, p { margin: 0; }
+
+  /* ---------- app shell ---------- */
+  .app-shell {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    width: 100%;
+    max-width: 1180px;
+    height: 760px;
+    background: var(--bg-0);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  }
+
+  /* ---------- sidebar ---------- */
+  .sidebar {
+    background: var(--bg-1);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-5) var(--space-3);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3) var(--space-6);
+  }
+
+  .brand__mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: #14181b;
+    border: 2px solid var(--accent-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex: none;
+  }
+
+  .brand__name {
+    font: var(--text-h2);
+    font-size: 15px;
+    letter-spacing: .01em;
+  }
+
+  .nav-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-3) var(--space-3);
+    background: transparent;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-standard),
+                color var(--duration-fast) var(--ease-standard);
+  }
+
+  .nav-item:hover {
+    background: var(--bg-3);
+    color: var(--text-primary);
+  }
+
+  .nav-item:focus-visible {
+    outline: 2px solid var(--accent-500);
+    outline-offset: 2px;
+  }
+
+  .nav-item.is-active {
+    background: var(--accent-soft-bg);
+    border-left-color: var(--accent-500);
+    color: var(--text-primary);
+  }
+
+  .nav-item.is-active .nav-item__icon { color: var(--accent-400); }
+
+  .nav-item__icon {
+    width: 20px;
+    flex: none;
+    text-align: center;
+    font-size: 15px;
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: var(--space-4) var(--space-3) var(--space-2);
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .reduce-motion-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .reduce-motion-row label {
+    font: var(--text-label);
+    color: var(--text-tertiary);
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .switch {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    flex: none;
+  }
+
+  .switch input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .switch__track {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    transition: background var(--duration-fast) var(--ease-standard);
+  }
+
+  .switch__thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    transition: transform var(--duration-fast) var(--ease-standard),
+                background var(--duration-fast) var(--ease-standard);
+  }
+
+  .switch input:checked ~ .switch__track { background: var(--accent-soft-bg); border-color: var(--accent-soft-border); }
+  .switch input:checked ~ .switch__thumb { transform: translateX(14px); background: var(--accent-500); }
+  .switch input:focus-visible ~ .switch__track { outline: 2px solid var(--accent-500); outline-offset: 2px; }
+
+  .version-label {
+    font: var(--text-micro);
+    color: var(--text-tertiary);
+  }
+
+  /* ---------- main / topbar ---------- */
+  .main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-5) var(--space-6);
+    border-bottom: 1px solid var(--border-subtle);
+    flex: none;
+  }
+
+  .topbar h1 { font: var(--text-h1); }
+
+  .screen-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-6);
+  }
+
+  .screen { display: none; flex-direction: column; gap: var(--space-5); }
+  .screen.is-visible { display: flex; }
+
+  /* ---------- cards ---------- */
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+  }
+
+  .card--elevated { background: var(--bg-3); }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+  }
+
+  .card__label {
+    font: var(--text-label);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-2);
+  }
+
+  .card__value {
+    font: var(--text-h2);
+  }
+
+  .card__sub {
+    font: var(--text-micro);
+    color: var(--text-secondary);
+    margin-top: var(--space-1);
+  }
+
+  /* ---------- buttons ---------- */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: var(--accent-500);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: var(--space-3) var(--space-6);
+    font: var(--text-body);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-standard),
+                transform var(--duration-fast) var(--ease-standard);
+  }
+
+  .btn-primary:hover { background: var(--accent-600); }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  .btn-text {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    font-weight: 500;
+    padding: var(--space-1) 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    transition: text-decoration-color var(--duration-fast) var(--ease-standard),
+                color var(--duration-fast) var(--ease-standard);
+  }
+
+  .btn-text:hover, .btn-text:focus-visible {
+    color: var(--text-primary);
+    text-decoration-color: var(--accent-500);
+  }
+
+  .btn-text:focus-visible { outline: 2px solid var(--accent-500); outline-offset: 3px; }
+
+  /* ---------- status chip ---------- */
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-pill);
+    font: var(--text-body);
+    font-weight: 600;
+    width: fit-content;
+  }
+
+  .status-chip__symbol { font-size: 13px; line-height: 1; }
+
+  .status-chip--idle {
+    background: rgba(154, 163, 171, 0.12);
+    border: 1px solid rgba(154, 163, 171, 0.35);
+    color: var(--status-idle-color);
+  }
+
+  .status-chip--recording {
+    background: var(--accent-soft-bg);
+    border: 1px solid var(--accent-soft-border);
+    color: var(--accent-400);
+  }
+
+  .status-chip--transcribing {
+    background: rgba(242, 193, 78, 0.12);
+    border: 1px solid rgba(242, 193, 78, 0.35);
+    color: var(--status-transcribing-color);
+  }
+
+  .status-chip--attention {
+    background: rgba(242, 85, 90, 0.12);
+    border: 1px solid rgba(242, 85, 90, 0.35);
+    color: var(--status-attention-color);
+  }
+
+  /* ---------- chip-row (dropdown replacement) ---------- */
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .chip {
+    background: var(--bg-3);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    border-radius: var(--radius-pill);
+    padding: var(--space-2) var(--space-4);
+    font: var(--text-body);
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-standard),
+                border-color var(--duration-fast) var(--ease-standard),
+                color var(--duration-fast) var(--ease-standard);
+  }
+
+  .chip:hover { color: var(--text-primary); }
+  .chip:focus-visible { outline: 2px solid var(--accent-500); outline-offset: 2px; }
+
+  .chip.is-selected {
+    background: var(--accent-soft-bg);
+    border-color: var(--accent-soft-border);
+    color: var(--accent-400);
+  }
+
+  /* ---------- meter (reused from HUD) ---------- */
+  .meter {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 28px;
+  }
+
+  .meter-bar {
+    width: 5px;
+    border-radius: 2px;
+    background: var(--accent-500);
+    height: calc(var(--level, 0.1) * 100%);
+    opacity: 0.25;
+    transition: height var(--duration-base) var(--ease-standard),
+                opacity var(--duration-base) var(--ease-standard);
+  }
+
+  .meter.is-live .meter-bar { opacity: 1; }
+
+  /* ---------- placeholder panel ---------- */
+  .placeholder-panel {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: var(--space-9) var(--space-6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-tertiary);
+    font: var(--text-body);
+    min-height: 420px;
+  }
+
+  /* ---------- home-specific layout bits ---------- */
+  .home-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .home-top-left {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .home-primary-action {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .list-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .list-row:last-child { border-bottom: none; }
+
+  .list-row__text { font: var(--text-body); color: var(--text-primary); }
+  .list-row__meta { font: var(--text-micro); color: var(--text-tertiary); }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .section-title h2 { font: var(--text-h2); }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font: var(--text-micro);
+    color: var(--accent-400);
+    background: var(--accent-soft-bg);
+    border: 1px solid var(--accent-soft-border);
+    border-radius: var(--radius-sm);
+    padding: 2px var(--space-2);
+  }
+
+  @media (max-width: 720px) {
+    .card-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ====================================================================
+     TRAINING & PROFILE SCREEN - added by track agent
+     Reuses every token/component from the foundation above; net-new
+     classes are prefixed `training-` to avoid collisions at merge time.
+     ==================================================================== */
+
+  /* --- design-time preview switcher -----------------------------------
+     This screen has 6 real, distinct states (no session / in session /
+     in session with a QC retry / complete-activated / complete-rejected /
+     version history) but only one can be live at a time in the shipped
+     app. Since a static mock can't hold real session state, this dashed
+     strip (visually flagged as scaffolding, same dashed language as
+     .placeholder-panel) lets a reviewer jump between them. It is NOT
+     part of the shipped UI - ships-UI navigation between these states is
+     the real links/buttons inside each state (Resume, Start, Done, Train
+     Again, View version history), which are wired functionally below. */
+  .training-preview-bar {
+    border: 2px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .training-preview-bar__label {
+    font: var(--text-micro);
+    color: var(--text-tertiary);
+  }
+
+  .training-state { display: none; flex-direction: column; gap: var(--space-5); }
+  .training-state.is-active { display: flex; }
+
+  /* --- no-session state --- */
+  .training-profile-fact {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font: var(--text-h2);
+  }
+
+  .training-profile-fact__arrow { color: var(--text-tertiary); font-weight: 400; }
+  .training-profile-fact__win { color: var(--accent-400); }
+
+  .training-cta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    flex-wrap: wrap;
+  }
+
+  .training-cta-copy { display: flex; flex-direction: column; gap: var(--space-1); }
+
+  /* --- in-session state --- */
+  .training-prompt-source {
+    font: var(--text-label);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--accent-400);
+  }
+
+  .training-prompt-text {
+    font: var(--text-h1);
+    font-size: 22px;
+    line-height: 1.4;
+    margin-top: var(--space-2);
+  }
+
+  .training-record-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    margin-top: var(--space-5);
+    flex-wrap: wrap;
+  }
+
+  .training-progress {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .training-progress__track {
+    width: 220px;
+    height: 6px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-3);
+    overflow: hidden;
+  }
+
+  .training-progress__fill {
+    height: 100%;
+    background: var(--accent-500);
+    border-radius: var(--radius-pill);
+    transition: width var(--duration-slow) var(--ease-standard);
+  }
+
+  /* --- QC recovery banner: transparent, non-punitive ---
+     Reuses the closed status-chip vocabulary honestly (this really is a
+     "needs attention" moment), but pairs it with plain-language what /
+     why / next-action copy so the tone reads as a safety net, not a
+     scolding. Never shown as a bare red flash - always this full card. */
+  .training-qc-banner {
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-start;
+    border: 1px solid rgba(242, 193, 78, 0.35);
+    background: rgba(242, 193, 78, 0.08);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .training-qc-banner__body { display: flex; flex-direction: column; gap: var(--space-2); }
+  .training-qc-banner__title { font: var(--text-body); font-weight: 600; color: var(--text-primary); }
+  .training-qc-banner__detail { font: var(--text-body); color: var(--text-secondary); }
+  .training-qc-banner__next { font: var(--text-micro); color: var(--text-tertiary); }
+
+  /* --- complete / benchmark states --- */
+  .training-verdict-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .badge--neutral {
+    color: var(--text-secondary);
+    background: var(--bg-3);
+    border-color: var(--border-strong);
+  }
+
+  .training-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+  }
+
+  .training-metric {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .training-metric__compare {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    font: var(--text-h2);
+  }
+
+  .training-metric__old { color: var(--text-tertiary); font-size: 15px; }
+  .training-metric__delta { font: var(--text-micro); }
+  .training-metric__delta--ok { color: var(--accent-400); }
+  .training-metric__delta--over { color: var(--status-transcribing-color); }
+
+  .training-reassurance {
+    font: var(--text-body);
+    color: var(--text-secondary);
+  }
+
+  /* --- version history --- */
+  .training-version-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .training-version-row:last-child { border-bottom: none; }
+
+  .training-version-main { display: flex; align-items: center; gap: var(--space-3); }
+  .training-version-id { font: var(--text-body); font-weight: 600; min-width: 34px; }
+  .training-version-meta { display: flex; flex-direction: column; gap: var(--space-1); }
+  .training-version-meta__wer { font: var(--text-body); color: var(--text-secondary); }
+  .training-version-meta__date { font: var(--text-micro); color: var(--text-tertiary); }
+  .training-version-caveat { font: var(--text-micro); color: var(--text-tertiary); margin-top: 2px; }
+  .training-version-action { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); }
+
+  @media (max-width: 720px) {
+    .training-metric-grid { grid-template-columns: 1fr; }
+  }
+
+  /* =====================================================================
+     HISTORY SCREEN - track-agent additions (all values reuse tokens above)
+     ===================================================================== */
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* --- toolbar: search + chip-row filters --- */
+  .history-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .history-toolbar__row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .history-search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 1;
+    min-width: 0;
+    background: var(--bg-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-4);
+    transition: border-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .history-search:focus-within {
+    border-color: var(--accent-500);
+  }
+
+  .history-search__icon {
+    color: var(--text-tertiary);
+    font-size: 14px;
+    flex: none;
+  }
+
+  .history-search__input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font: var(--text-body);
+  }
+
+  .history-search__input::placeholder { color: var(--text-tertiary); }
+
+  .history-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* --- results meta row --- */
+  .history-results-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font: var(--text-micro);
+    color: var(--text-tertiary);
+  }
+
+  /* --- list + rows --- */
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .history-row {
+    transition: background var(--duration-fast) var(--ease-standard);
+  }
+
+  .history-row:hover,
+  .history-row:focus-within {
+    background: var(--bg-3);
+  }
+
+  .history-row__main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .history-row__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+    flex: 1;
+  }
+
+  .history-row__text {
+    font: var(--text-body);
+    color: var(--text-primary);
+  }
+
+  .history-row__text--muted { color: var(--text-secondary); font-style: italic; }
+
+  .history-row__meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    font: var(--text-micro);
+    color: var(--text-tertiary);
+  }
+
+  .history-row__mode-tag {
+    font: var(--text-micro);
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    background: var(--bg-3);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 1px var(--space-2);
+  }
+
+  .history-row__side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-2);
+    flex: none;
+  }
+
+  .history-row__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  /* --- icon buttons (per-row actions) --- */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-standard),
+                color var(--duration-fast) var(--ease-standard),
+                border-color var(--duration-fast) var(--ease-standard),
+                transform var(--duration-fast) var(--ease-standard);
+  }
+
+  .icon-btn:hover { background: var(--bg-2); color: var(--text-primary); }
+  .icon-btn:focus-visible { outline: 2px solid var(--accent-500); outline-offset: 2px; }
+
+  .icon-btn.is-copied {
+    background: var(--accent-soft-bg);
+    border-color: var(--accent-soft-border);
+    color: var(--accent-400);
+  }
+
+  .icon-btn--chevron[aria-expanded="true"] {
+    transform: rotate(180deg);
+    color: var(--accent-400);
+  }
+
+  /* --- inline progressive-disclosure detail panel --- */
+  .history-row__detail {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows var(--duration-base) var(--ease-standard);
+  }
+
+  .history-row__detail.is-expanded { grid-template-rows: 1fr; }
+
+  .history-row__detail-inner { overflow: hidden; }
+
+  .history-row__detail.is-expanded .history-row__detail-inner {
+    padding-top: var(--space-4);
+    margin-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .history-diff {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+
+  .history-diff__col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .history-diff__text { font: var(--text-body); color: var(--text-secondary); }
+  .history-diff__col--final .history-diff__text { color: var(--text-primary); }
+
+  .history-diff__meta {
+    font: var(--text-micro);
+    color: var(--text-tertiary);
+    margin-top: var(--space-2);
+  }
+
+  .history-note {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    font: var(--text-body);
+    color: var(--text-secondary);
+  }
+
+  .history-note__icon { color: var(--status-attention-color); flex: none; }
+
+  @media (max-width: 720px) {
+    .history-diff { grid-template-columns: 1fr; }
+    .history-toolbar__row { flex-direction: column; align-items: stretch; }
+  }
+
+  /* --- status chip variants for History's 5-value domain vocabulary
+     (reuses the exact 4 existing status colors/tints - no new hues) --- */
+  .status-chip--injected,
+  .status-chip--translated {
+    background: var(--accent-soft-bg);
+    border: 1px solid var(--accent-soft-border);
+    color: var(--accent-400);
+  }
+
+  .status-chip--clipboard {
+    background: rgba(242, 193, 78, 0.12);
+    border: 1px solid rgba(242, 193, 78, 0.35);
+    color: var(--status-transcribing-color);
+  }
+
+  .status-chip--rewrite-failed {
+    background: rgba(242, 85, 90, 0.12);
+    border: 1px solid rgba(242, 85, 90, 0.35);
+    color: var(--status-attention-color);
+  }
+
+  .status-chip--discarded {
+    background: rgba(154, 163, 171, 0.12);
+    border: 1px solid rgba(154, 163, 171, 0.35);
+    color: var(--status-idle-color);
+  }
+
+  /* --- empty / no-results states --- */
+  .history-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: var(--space-3);
+    padding: var(--space-9) var(--space-6);
+  }
+
+  .history-empty__icon {
+    font-size: 32px;
+    color: var(--text-tertiary);
+  }
+
+  .history-empty h2 { font: var(--text-h2); color: var(--text-primary); }
+  .history-empty p { color: var(--text-secondary); max-width: 360px; }
+
+  /* =====================================================================
+     MODELS & SYSTEM screen - scoped additions (track agent: Models & System)
+     Reuses all tokens/components above; adds only what the screen needs:
+     a compact system-specs grid, engine-selection cards (chip-row pattern
+     applied to a larger, richer card), a determinate/indeterminate progress
+     component for downloads, and a transient success toast.
+     ===================================================================== */
+
+  .system-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(160px, 240px));
+    gap: var(--space-4);
+  }
+
+  .section-sub {
+    font: var(--text-body);
+    color: var(--text-secondary);
+    max-width: 640px;
+  }
+
+  .engine-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+  }
+
+  .engine-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-standard),
+                border-color var(--duration-fast) var(--ease-standard);
+  }
+
+  .engine-card:hover { background: var(--bg-3); }
+  .engine-card:focus-visible { outline: 2px solid var(--accent-500); outline-offset: 2px; }
+
+  .engine-card.is-selected {
+    background: var(--accent-soft-bg);
+    border-color: var(--accent-soft-border);
+  }
+
+  .engine-card[aria-disabled="true"] {
+    cursor: default;
+    opacity: 0.7;
+  }
+
+  .engine-card__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .engine-card__name-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: flex-start;
+  }
+
+  .engine-card__name {
+    font: var(--text-h2);
+    font-size: 16px;
+  }
+
+  .engine-card__precision {
+    color: var(--text-tertiary);
+    font-weight: 400;
+    font-size: 13px;
+  }
+
+  .engine-card__desc {
+    font: var(--text-body);
+    color: var(--text-secondary);
+  }
+
+  .engine-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    font: var(--text-micro);
+    color: var(--text-tertiary);
+  }
+
+  /* engine-state - a second, purpose-specific symbol+word+color indicator
+     (distinct from the global 4-value .status-chip vocabulary, which is
+     reserved for app-wide recording status). Same accessibility rule
+     applies: never color alone. */
+  .engine-state {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font: var(--text-micro);
+    font-weight: 600;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-pill);
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .engine-state--active {
+    color: var(--accent-400);
+    background: var(--accent-soft-bg);
+    border: 1px solid var(--accent-soft-border);
+  }
+
+  .engine-state--ready,
+  .engine-state--not-downloaded {
+    color: var(--text-tertiary);
+    background: var(--bg-3);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .engine-state--downloading,
+  .engine-state--switching {
+    color: var(--status-transcribing-color);
+    background: rgba(242, 193, 78, 0.12);
+    border: 1px solid rgba(242, 193, 78, 0.35);
+  }
+
+  .engine-state--error {
+    color: var(--status-attention-color);
+    background: rgba(242, 85, 90, 0.12);
+    border: 1px solid rgba(242, 85, 90, 0.35);
+  }
+
+  .progress-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* merge fix: the [hidden] attribute and this rule tie in specificity, and
+     without this the "hidden" download/switch progress bar rendered as a
+     visible empty sliver at rest on every engine card. */
+  .progress-wrap[hidden] { display: none; }
+
+  .progress-track {
+    width: 100%;
+    height: 8px;
+    border-radius: var(--radius-pill);
+    background: var(--bg-3);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--status-transcribing-color);
+    border-radius: var(--radius-pill);
+    transition: width var(--duration-base) var(--ease-standard);
+  }
+
+  .progress-fill.is-indeterminate {
+    width: 40%;
+    animation: progress-indeterminate 1.1s var(--ease-standard) infinite;
+  }
+
+  @keyframes progress-indeterminate {
+    0%   { transform: translateX(-120%); }
+    100% { transform: translateX(280%); }
+  }
+
+  .progress-caption {
+    font: var(--text-micro);
+    color: var(--text-secondary);
+  }
+
+  .engine-toast {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font: var(--text-body);
+    font-weight: 600;
+    color: var(--accent-400);
+    background: var(--accent-soft-bg);
+    border: 1px solid var(--accent-soft-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: opacity var(--duration-base) var(--ease-decel),
+                transform var(--duration-base) var(--ease-decel);
+  }
+
+  .engine-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .engine-toast.is-error {
+    color: var(--status-attention-color);
+    background: rgba(242, 85, 90, 0.12);
+    border-color: rgba(242, 85, 90, 0.35);
+  }
+
+  .engine-note {
+    font: var(--text-micro);
+    color: var(--text-tertiary);
+    max-width: 640px;
+  }
+
+  @media (max-width: 720px) {
+    .system-grid,
+    .engine-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ============================================================
+     MICS & SPEAKERS SCREEN - scoped additions (tokens only, no
+     new raw colors). See inline comment above the screen markup
+     for the design rationale (no existing pattern to copy from).
+     ============================================================ */
+
+  .mics-toolbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .mics-toolbar-left { display: flex; flex-direction: column; gap: var(--space-2); }
+
+  .session-summary { font: var(--text-body); color: var(--text-secondary); }
+  .session-summary strong { color: var(--text-primary); font-weight: 600; }
+
+  .mics-primary-action { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
+
+  .btn-primary:disabled {
+    background: var(--bg-3);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+  }
+  .btn-primary:disabled:hover { background: var(--bg-3); }
+  .btn-primary:disabled:active { transform: none; }
+
+  .action-helper { font: var(--text-micro); color: var(--text-tertiary); text-align: right; }
+
+  .mic-list .mic-row:last-child { border-bottom: none; }
+
+  .mic-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    padding: var(--space-4) 0;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-wrap: wrap;
+  }
+
+  .mic-row__device {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1 1 220px;
+    min-width: 200px;
+  }
+
+  .mic-device-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    background: var(--bg-3);
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex: none;
+    transition: background var(--duration-base) var(--ease-standard),
+                border-color var(--duration-base) var(--ease-standard);
+  }
+
+  .mic-device-icon.is-live {
+    background: var(--accent-soft-bg);
+    border-color: var(--accent-soft-border);
+  }
+
+  .mic-row__name { font: var(--text-body); font-weight: 600; color: var(--text-primary); }
+  .mic-row__meta { font: var(--text-micro); color: var(--text-tertiary); margin-top: 2px; }
+
+  .mic-row__meter-wrap {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .meter-caption { font: var(--text-micro); color: var(--text-tertiary); }
+
+  .mic-row__assignment {
+    flex: 1 1 260px;
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* assigned-chip: name+avatar readout - distinct from .chip (which is
+     reserved for the picker's selectable options) to avoid confusing the
+     two roles. */
+  .assigned-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: var(--accent-soft-bg);
+    border: 1px solid var(--accent-soft-border);
+    border-radius: var(--radius-pill);
+    padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+    width: fit-content;
+  }
+
+  .assigned-chip__avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-500);
+    color: var(--text-on-accent);
+    font: var(--text-micro);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+
+  .assigned-chip__name { font: var(--text-body); font-weight: 600; color: var(--text-primary); }
+
+  .assigned-chip--unassigned { background: transparent; border: 1px dashed var(--border-strong); }
+  .assigned-chip--unassigned .assigned-chip__avatar { background: var(--bg-3); color: var(--text-tertiary); }
+  .assigned-chip--unassigned .assigned-chip__name { color: var(--text-tertiary); font-weight: 500; }
+
+  /* confirm-chip: "auto-detected, needs confirmation" - deliberately reuses
+     the amber (--status-transcribing-color) token, not the red attention
+     color: an uncertain guess is in-progress, not an error. It does NOT
+     reuse .status-chip--transcribing itself (that class's word is fixed to
+     the recording pipeline's own 4-state vocabulary); this is a new,
+     narrowly-scoped component borrowing only the color token. */
+  .confirm-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: rgba(242, 193, 78, 0.12);
+    border: 1px solid rgba(242, 193, 78, 0.35);
+    color: var(--status-transcribing-color);
+    border-radius: var(--radius-pill);
+    padding: var(--space-1) var(--space-3);
+    width: fit-content;
+    font: var(--text-body);
+    font-weight: 600;
+  }
+
+  .confirm-chip__symbol { font-size: 13px; }
+
+  .confirm-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+
+  .confirm-btn {
+    background: var(--accent-500);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: var(--space-1) var(--space-4);
+    font: var(--text-micro);
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-standard);
+  }
+
+  .confirm-btn:hover { background: var(--accent-600); }
+  .confirm-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  .picker-block { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-1); }
+  .picker-label { font: var(--text-micro); color: var(--text-tertiary); }
+  .picker-row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+
+  .chip--new {
+    background: transparent;
+    border: 1px dashed var(--border-strong);
+    color: var(--text-secondary);
+  }
+  .chip--new:hover { color: var(--accent-400); border-color: var(--accent-soft-border); }
+
+  .segment-card .segment-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .segment-card .segment-row:last-child { border-bottom: none; }
+
+  .segment-row__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .segment-row__speaker { display: flex; align-items: center; gap: var(--space-2); }
+  .segment-row__speaker .assigned-chip__avatar { width: 18px; height: 18px; font-size: 9px; }
+
+  .segment-text { font: var(--text-body); color: var(--text-primary); }
+  .segment-translation { font: var(--text-micro); color: var(--text-secondary); font-style: italic; }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 720px) {
+    .mic-row { flex-direction: column; align-items: flex-start; }
+    .mics-toolbar { flex-direction: column; }
+    .mics-primary-action { align-items: flex-start; }
+    .action-helper { text-align: left; }
+  }
+
+  /* design-preview-flag: shared visual marker for the two track-agent
+     "jump to a state" review aids (Training's preview bar, History's
+     preview-empty toggle) so both read unambiguously as reviewer tooling,
+     never as shipped product UI. */
+  .design-preview-flag {
+    display: inline-flex;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 2px var(--space-2);
+  }
+  .design-preview-flag .btn-text { color: var(--text-tertiary); }
+  .design-preview-flag .btn-text:hover,
+  .design-preview-flag .btn-text:focus-visible { color: var(--text-secondary); }
+</style>
+
+<div class="app-shell">
+  <!-- ============================= SIDEBAR ============================= -->
+  <nav class="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">🎙</span>
+      <span class="brand__name">speakeasy</span>
+    </div>
+
+    <ul class="nav-list" id="nav-list" role="tablist" aria-orientation="vertical">
+      <li>
+        <button class="nav-item is-active" role="tab" aria-selected="true" aria-current="page"
+                data-target="screen-home" data-title="Home" tabindex="0">
+          <span class="nav-item__icon" aria-hidden="true">◆</span>
+          <span class="nav-item__label">Home</span>
+        </button>
+      </li>
+      <li>
+        <button class="nav-item" role="tab" aria-selected="false"
+                data-target="screen-training" data-title="Training &amp; Profile" tabindex="-1">
+          <span class="nav-item__icon" aria-hidden="true">◑</span>
+          <span class="nav-item__label">Training &amp; Profile</span>
+        </button>
+      </li>
+      <li>
+        <button class="nav-item" role="tab" aria-selected="false"
+                data-target="screen-history" data-title="History" tabindex="-1">
+          <span class="nav-item__icon" aria-hidden="true">▤</span>
+          <span class="nav-item__label">History</span>
+        </button>
+      </li>
+      <li>
+        <button class="nav-item" role="tab" aria-selected="false"
+                data-target="screen-models" data-title="Models &amp; System" tabindex="-1">
+          <span class="nav-item__icon" aria-hidden="true">▣</span>
+          <span class="nav-item__label">Models &amp; System</span>
+        </button>
+      </li>
+      <li>
+        <button class="nav-item" role="tab" aria-selected="false"
+                data-target="screen-mics" data-title="Mics &amp; Speakers" tabindex="-1">
+          <span class="nav-item__icon" aria-hidden="true">◉</span>
+          <span class="nav-item__label">Mics &amp; Speakers</span>
+        </button>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <div class="reduce-motion-row">
+        <label for="reduce-motion-toggle">Reduce motion</label>
+        <span class="switch">
+          <input type="checkbox" id="reduce-motion-toggle" aria-label="Reduce motion">
+          <span class="switch__track" aria-hidden="true"></span>
+          <span class="switch__thumb" aria-hidden="true"></span>
+        </span>
+      </div>
+      <span class="version-label">speakeasy 2.0 · foundation build</span>
+    </div>
+  </nav>
+
+  <!-- ============================== MAIN =============================== -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="screen-title">Home</h1>
+    </div>
+
+    <div class="screen-content">
+
+      <!-- ============================ HOME SCREEN ============================ -->
+      <section class="screen is-visible" id="screen-home" aria-labelledby="screen-title">
+
+        <div class="home-top">
+          <div class="home-top-left">
+            <span class="status-chip status-chip--idle" id="home-status-chip" aria-label="Status: Idle">
+              <span class="status-chip__symbol" aria-hidden="true">●</span>
+              <span class="status-chip__word">Idle</span>
+            </span>
+            <p class="card__sub">Listening for your dictation shortcut - tap Right ⌘ to toggle, hold to push-to-talk.</p>
+          </div>
+          <div class="home-primary-action">
+            <div class="meter" id="home-meter" aria-hidden="true">
+              <span class="meter-bar" style="--level:0.05"></span>
+              <span class="meter-bar" style="--level:0.05"></span>
+              <span class="meter-bar" style="--level:0.05"></span>
+              <span class="meter-bar" style="--level:0.05"></span>
+              <span class="meter-bar" style="--level:0.05"></span>
+            </div>
+            <button class="btn-primary" id="home-start-btn">
+              <span aria-hidden="true">●</span> Start Dictation
+            </button>
+          </div>
+        </div>
+
+        <div class="card-grid">
+          <div class="card">
+            <div class="card__label">Today</div>
+            <div class="card__value" id="home-today-count">-</div>
+            <div class="card__sub" id="home-today-words">-</div>
+          </div>
+          <div class="card">
+            <div class="card__label">Active Engine</div>
+            <div class="card__value" id="home-engine-label">-</div>
+            <div class="card__sub" id="home-engine-detail">-</div>
+          </div>
+          <div class="card">
+            <div class="card__label">Voice Profile</div>
+            <div class="card__value" id="home-profile-label">-</div>
+            <div class="card__sub" id="home-profile-detail">-</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            <h2>Recent activity</h2>
+            <button class="btn-text" id="home-view-history">View all in History →</button>
+          </div>
+          <div id="home-recent-list">
+            <div class="list-row"><span class="list-row__text">Loading...</span></div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ===================== TRAINING & PROFILE (empty) ===================== -->
+      <section class="screen" id="screen-training" aria-labelledby="screen-title">
+
+        <!-- ========== STATE 1: NO SESSION IN PROGRESS ========== -->
+        <div class="training-state is-active" data-state="no-session">
+
+          <!-- Real data: speakeasy/gui/handlers/training.py::training_get_state
+               (ctx.profile_store.load_active()). Filled by the wiring script
+               below -- no hardcoded version/metrics left in this markup. -->
+          <div class="card" id="training-active-profile-card">
+            <div class="card__label">Active Voice Profile</div>
+            <div class="training-profile-fact" id="training-active-fact">Loading…</div>
+            <div class="card__sub" id="training-active-detail"></div>
+          </div>
+
+          <!-- ONE primary action: an incomplete session takes priority over
+               starting fresh (Principle 2). Starting new is a text-link,
+               never a second competing button. Visibility of this card vs.
+               #no-session-start-card is driven by the real
+               ctx.training_resumable() flag, not a hardcoded default. -->
+          <div class="card" id="no-session-resume-card" style="display:none;">
+            <div class="training-cta-row">
+              <div class="training-cta-copy">
+                <h2 style="font: var(--text-h2);">Resume your training session</h2>
+                <p class="card__sub">You have a training session in progress.</p>
+              </div>
+              <button class="btn-primary" id="btn-resume-session">▶ Resume Session</button>
+            </div>
+            <p style="margin-top: var(--space-4);">
+              <button class="btn-text" id="btn-discard-resume">Discard and start a new session instead</button>
+            </p>
+          </div>
+
+          <!-- Revealed by real state when there's no resumable session, or
+               the user chooses to discard one. -->
+          <div class="card" id="no-session-start-card" style="display:none;">
+            <h2 style="font: var(--text-h2); margin-bottom: var(--space-3);">Start a training session</h2>
+            <div class="chip-row" role="radiogroup" aria-label="Session length" id="session-length-row">
+              <button class="chip is-selected" role="radio" aria-checked="true" data-size="quick">Quick · 20 prompts · ~10 min</button>
+              <button class="chip" role="radio" aria-checked="false" data-size="full">Full · 80 prompts · ~40 min</button>
+            </div>
+            <p class="card__sub" style="margin: var(--space-3) 0 var(--space-4);">
+              Prompts mix phonetically-balanced sentences, your own vocabulary, and phrases you've
+              previously had auto-corrected - so the session targets what actually trips your profile up.
+            </p>
+            <button class="btn-primary" id="btn-start-session">● Start Training Session</button>
+          </div>
+
+          <!-- Shown after training_start/training_resume resolves -- the
+               live prompt-by-prompt recording happens in the overlay HUD
+               (speakeasy/overlay.py), not in this window. -->
+          <p class="card__sub training-overlay-note" id="training-overlay-note" style="display:none;"></p>
+
+          <div class="card">
+            <div class="section-title">
+              <h2>Version history</h2>
+              <button class="btn-text" data-goto="version-history">View all versions →</button>
+            </div>
+            <p class="card__sub" id="training-version-summary">Loading…</p>
+          </div>
+
+        </div>
+
+        <!-- Audit 2026-11-09 P1-6: the design-preview chip bar and the hardcoded
+             in-session / complete-activated / complete-rejected mock states (fabricated
+             profile-version, WER and latency figures) were removed from the shipped UI.
+             Training runs in the wizard window; this screen shows only real
+             profile-store data ("Not trained yet" until a profile exists). -->
+
+        <!-- ========== STATE 4: VERSION HISTORY ========== -->
+        <div class="training-state" data-state="version-history">
+
+          <div class="card">
+            <div class="section-title" style="margin-bottom: var(--space-2);">
+              <h2>Version history</h2>
+              <button class="btn-text" data-goto="no-session">← Back</button>
+            </div>
+            <p class="card__sub" style="margin-bottom: var(--space-4);">
+              Every version is kept. Restoring is instant and safe - it just points the app at a
+              different saved profile, no re-training and no data loss.
+            </p>
+
+            <p class="card__sub training-version-error" id="training-version-error" style="display:none;"></p>
+
+            <!-- Real data: speakeasy/gui/handlers/training.py::training_get_state
+                 (ctx.profile_store.list_versions(), newest first). Rows are
+                 built by the wiring script below -- no hardcoded versions. -->
+            <div id="training-version-list">
+              <p class="card__sub">Loading…</p>
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- ============================ HISTORY (empty) ========================= -->
+      <section class="screen" id="screen-history" aria-labelledby="screen-title">
+
+        <div id="history-live-region" class="sr-only" aria-live="polite"></div>
+
+        <!-- Toolbar: text search (principle 3 exemption - free text isn't a
+             small closed set) + two chip-rows for the small, known mode/status
+             vocabularies (principle 3). -->
+        <div class="history-toolbar card">
+          <div class="history-toolbar__row">
+            <div class="history-search">
+              <span class="history-search__icon" aria-hidden="true">⌕</span>
+              <input type="search" class="history-search__input" id="history-search-input"
+                     placeholder="Search transcripts…" aria-label="Search transcript text">
+            </div>
+            <button class="btn-text" id="history-clear-filters" type="button">Clear filters</button>
+          </div>
+
+          <div class="history-filter-group">
+            <div class="card__label" id="history-mode-label">Mode</div>
+            <div class="chip-row" role="radiogroup" aria-label="Filter by mode" aria-labelledby="history-mode-label" id="filter-mode">
+              <button class="chip is-selected" role="radio" aria-checked="true" tabindex="0" data-value="all">All</button>
+              <button class="chip" role="radio" aria-checked="false" tabindex="-1" data-value="raw">Raw</button>
+              <button class="chip" role="radio" aria-checked="false" tabindex="-1" data-value="clean">Clean</button>
+              <button class="chip" role="radio" aria-checked="false" tabindex="-1" data-value="translate">Translate</button>
+            </div>
+          </div>
+
+          <div class="history-filter-group">
+            <div class="card__label" id="history-status-label">Status</div>
+            <div class="chip-row" role="radiogroup" aria-label="Filter by status" aria-labelledby="history-status-label" id="filter-status">
+              <button class="chip is-selected" role="radio" aria-checked="true" tabindex="0" data-value="all">All</button>
+              <button class="chip" role="radio" aria-checked="false" tabindex="-1" data-value="injected">✓ Injected</button>
+              <button class="chip" role="radio" aria-checked="false" tabindex="-1" data-value="clipboard_only">⧉ Clipboard Only</button>
+              <button class="chip" role="radio" aria-checked="false" tabindex="-1" data-value="translated">🌐 Translated</button>
+              <button class="chip" role="radio" aria-checked="false" tabindex="-1" data-value="rewrite_failed">⚠ Rewrite Failed</button>
+              <button class="chip" role="radio" aria-checked="false" tabindex="-1" data-value="discarded">∅ Discarded</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="history-results-meta">
+          <span id="history-count">0 dictations</span>
+        </div>
+
+        <!-- ===================== dictation rows: rendered by history.js from real
+             history_get_entries results (speakeasy/gui/handlers/history.py) ===================== -->
+        <div class="history-list" id="history-list" hidden>
+
+        </div>
+
+        <!-- ===================== empty / no-results states ===================== -->
+        <div class="history-empty card" id="history-empty-noresults" hidden>
+          <div class="history-empty__icon" aria-hidden="true">⌕</div>
+          <h2>No matching dictations</h2>
+          <p>Try a different search term, or clear your filters to see everything again.</p>
+          <button class="btn-text" id="history-noresults-clear" type="button">Clear filters</button>
+        </div>
+
+        <div class="history-empty card" id="history-empty-nodata" hidden>
+          <div class="history-empty__icon" aria-hidden="true">▤</div>
+          <h2>No dictations yet</h2>
+          <p>Once you start dictating, every transcript lands here - searchable, filterable, and easy to copy back out.</p>
+          <button class="btn-primary" id="history-empty-nodata-cta" type="button">
+            <span aria-hidden="true">●</span> Start Dictation
+          </button>
+        </div>
+
+      </section>
+
+      <!-- ======================= MODELS & SYSTEM (empty) ======================= -->
+      <section class="screen" id="screen-models" aria-labelledby="screen-title">
+
+        <div>
+          <div class="section-title">
+            <h2>System</h2>
+          </div>
+          <p class="section-sub">Detected automatically, shown for transparency - this isn't something you configure.</p>
+        </div>
+
+        <div class="system-grid">
+          <div class="card">
+            <div class="card__label">Processor</div>
+            <div class="card__value" id="models-chip">Detecting…</div>
+            <div class="card__sub" id="models-chip-sub"></div>
+          </div>
+          <div class="card">
+            <div class="card__label">Memory</div>
+            <div class="card__value" id="models-ram">—</div>
+            <div class="card__sub" id="models-ram-sub"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">
+            <h2>Dictation Engine</h2>
+          </div>
+          <p class="section-sub">Pick which engine transcribes your speech. Switching applies immediately - no restart needed.</p>
+        </div>
+
+        <div class="engine-toast" role="status" aria-live="polite" id="engine-toast">
+          <span aria-hidden="true" data-role="toast-icon">✓</span>
+          <span id="engine-toast-text">Switched engine.</span>
+        </div>
+
+        <div class="engine-grid" role="radiogroup" aria-label="Dictation engine" id="engine-grid">
+
+          <!-- Both cards are re-rendered from the real models_get_state()
+               response on load -- data-* / text content below is just
+               initial "loading" placeholder, never sample data left in
+               place. Card identity (data-engine) matches the two real
+               ENGINE_INFO keys (speakeasy/sysinfo.py): parakeet, whisper. -->
+          <div class="engine-card"
+               id="engine-parakeet"
+               data-engine="parakeet"
+               role="radio"
+               aria-checked="false"
+               aria-disabled="true"
+               tabindex="-1">
+            <div class="engine-card__head">
+              <div class="engine-card__name-row">
+                <span class="engine-card__name" data-role="name">Loading…</span>
+                <span class="badge" data-role="badge" hidden>★ Recommended</span>
+              </div>
+              <span class="engine-state" data-role="state"></span>
+            </div>
+            <p class="engine-card__desc" data-role="desc"></p>
+            <div class="progress-wrap" data-role="progress" hidden>
+              <div class="progress-track"><div class="progress-fill" data-role="progress-fill"></div></div>
+              <div class="progress-caption" data-role="progress-caption"></div>
+            </div>
+          </div>
+
+          <div class="engine-card"
+               id="engine-whisper"
+               data-engine="whisper"
+               role="radio"
+               aria-checked="false"
+               aria-disabled="true"
+               tabindex="-1">
+            <div class="engine-card__head">
+              <div class="engine-card__name-row">
+                <span class="engine-card__name" data-role="name">Loading…</span>
+                <span class="badge" data-role="badge" hidden>★ Recommended</span>
+              </div>
+              <span class="engine-state" data-role="state"></span>
+            </div>
+            <p class="engine-card__desc" data-role="desc"></p>
+            <div class="progress-wrap" data-role="progress" hidden>
+              <div class="progress-track"><div class="progress-fill" data-role="progress-fill"></div></div>
+              <div class="progress-caption" data-role="progress-caption"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <p class="engine-note">ⓘ Unlike some competitors, speakeasy doesn't ship a hardware-tiered lineup of models. Both engines run comfortably on any Mac capable of running the app - "Recommended" reflects Parakeet's own benchmark results, not a hardware requirement.</p>
+
+      </section>
+
+      <!-- ======================= MICS & SPEAKERS (empty) ======================= -->
+      <section class="screen" id="screen-mics" aria-labelledby="screen-title">
+
+        <div class="mics-toolbar">
+          <div class="mics-toolbar-left">
+            <span class="card__label">This session</span>
+            <p class="session-summary" id="mics-session-summary">
+              <strong>Detecting microphones…</strong>
+            </p>
+          </div>
+          <div class="mics-primary-action">
+            <button class="btn-primary" id="mics-start-btn" disabled>
+              <span aria-hidden="true">●</span> Start Session
+            </button>
+            <span class="action-helper" id="mics-action-helper">Looking for input devices…</span>
+          </div>
+        </div>
+
+        <div class="design-preview-flag" style="display:flex; margin-bottom: var(--space-3);">
+          <span class="badge" style="margin-right: var(--space-2);">Preview</span>
+          <span class="card__sub">Multi-speaker sessions, assignment, and live segments below are a
+            design preview of a planned feature - only the microphone list above is real
+            (detected via your Mac's actual audio devices).</span>
+        </div>
+
+        <div class="card mic-list">
+          <div class="section-title" style="margin-bottom: var(--space-3)">
+            <h2>Detected microphones</h2>
+            <button class="btn-text" id="mics-rescan-btn">Rescan for devices</button>
+          </div>
+
+          <!-- Rows are rendered by JS below from the REAL device list returned
+               by callBridge('mics_list_devices', {}) (speakeasy/gui/handlers/mics.py,
+               which wraps sounddevice.query_devices()). Every row starts in the
+               "Unassigned" chip/picker state -- there is no speaker-profile
+               backend to pre-populate an assignment from, so we never invent
+               one (no fake "Evan"/"Erika"/"Matthew" pre-assignments here). -->
+          <div id="mics-device-list"></div>
+
+        </div>
+
+        <div class="card segment-card">
+          <div class="section-title">
+            <h2>Live segments this session <span class="badge">Preview</span></h2>
+            <span class="card__sub">Example only - corrections would refine that speaker's profile once this feature exists</span>
+          </div>
+
+          <div class="segment-row">
+            <div class="segment-row__top">
+              <span class="segment-row__speaker">
+                <span class="assigned-chip__avatar" aria-hidden="true">EV</span>
+                <span class="list-row__text">Speaker A</span>
+              </span>
+              <span class="list-row__meta">12 sec ago</span>
+            </div>
+            <p class="segment-text">"Let's push the launch to next Thursday."</p>
+            <button class="btn-text" id="mics-refine-example-1">Wasn't quite right? Refine Speaker A's profile →</button>
+          </div>
+
+          <div class="segment-row">
+            <div class="segment-row__top">
+              <span class="segment-row__speaker">
+                <span class="assigned-chip__avatar" aria-hidden="true">ER</span>
+                <span class="list-row__text">Speaker B</span>
+              </span>
+              <span class="list-row__meta">47 sec ago</span>
+            </div>
+            <p class="segment-text">"¿Puedes enviarme el contrato revisado?"</p>
+            <p class="segment-translation">Translated: "Can you send me the revised contract?"</p>
+            <button class="btn-text" id="mics-refine-example-2">Wasn't quite right? Refine Speaker B's profile →</button>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== Shared Python bridge helper (speakeasy/gui/window.py) =====
+  // Every screen's real-data wiring goes through callBridge(action, payload)
+  // -> Promise<result>. Do not call window.webkit.messageHandlers directly
+  // from screen code -- this is the one place that owns request ids and
+  // response routing, so parallel screen work never needs its own RPC glue.
+  (function () {
+    var pending = {};
+    var nextId = 1;
+    window.__bridgeResponse = function (id, response) {
+      var entry = pending[id];
+      if (!entry) return;
+      delete pending[id];
+      if (response && response.ok) entry.resolve(response.result);
+      else entry.reject(new Error((response && response.error) || 'bridge error'));
+    };
+    // Real-time push channel (Python -> JS, no request): screens that want
+    // live updates (e.g. Home's status chip/meter) register a listener.
+    var pushListeners = {};
+    window.__bridgePush = function (event, payload) {
+      (pushListeners[event] || []).forEach(function (fn) { fn(payload); });
+    };
+    window.onBridgePush = function (event, fn) {
+      (pushListeners[event] = pushListeners[event] || []).push(fn);
+    };
+    window.callBridge = function (action, payload) {
+      return new Promise(function (resolve, reject) {
+        var id = 'req' + (nextId++);
+        pending[id] = { resolve: resolve, reject: reject };
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.bridge) {
+          window.webkit.messageHandlers.bridge.postMessage({ id: id, action: action, payload: payload || {} });
+        } else {
+          // Not running inside the native host (e.g. opened directly in a
+          // browser for design review) -- fail fast and predictably rather
+          // than hang forever.
+          delete pending[id];
+          reject(new Error('callBridge: no native bridge present (design-preview mode)'));
+        }
+      });
+    };
+  })();
+</script>
+
+<script>
+  // ===== Home screen: real data (speakeasy/gui/handlers/home.py) =====
+  (function () {
+    function escapeHtml(s) {
+      var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+    }
+    function render(state) {
+      document.getElementById('home-today-count').textContent = state.today_count + ' dictation' + (state.today_count === 1 ? '' : 's');
+      document.getElementById('home-today-words').textContent = state.today_words.toLocaleString() + ' words transcribed';
+      document.getElementById('home-engine-label').textContent = state.engine_label;
+      document.getElementById('home-engine-detail').textContent = state.engine_detail;
+      var p = state.profile;
+      document.getElementById('home-profile-label').innerHTML = escapeHtml(p.label) +
+        (p.active ? ' <span class="badge">Active</span>' : '');
+      document.getElementById('home-profile-detail').textContent = p.detail;
+      var list = document.getElementById('home-recent-list');
+      if (!state.recent.length) {
+        list.innerHTML = '<div class="list-row"><span class="list-row__text">No dictations yet.</span></div>';
+      } else {
+        list.innerHTML = state.recent.map(function (r) {
+          return '<div class="list-row"><span class="list-row__text">"' + escapeHtml(r.text) + '"</span>' +
+                 '<span class="list-row__meta">' + escapeHtml(r.relative_time) + ' · ' + r.words + ' words</span></div>';
+        }).join('');
+      }
+    }
+    function refresh() {
+      callBridge('home_get_state', {}).then(render).catch(function (e) { console.error('home_get_state failed', e); });
+    }
+    document.getElementById('home-start-btn').addEventListener('click', function () {
+      callBridge('start_dictation', {}).catch(function (e) { console.error('start_dictation failed', e); });
+    });
+    document.getElementById('home-view-history').addEventListener('click', function () {
+      var nav = document.querySelector('.nav-item[data-target="screen-history"]');
+      if (nav) nav.click();
+    });
+    // Real-time push from Controller state changes (speakeasy/gui/window.py
+    // GuiWindow.push, wired from __main__.py's existing _render_and_update_icon).
+    onBridgePush('dictation_state', function (payload) {
+      var chip = document.getElementById('home-status-chip');
+      var word = chip.querySelector('.status-chip__word');
+      var symbol = chip.querySelector('.status-chip__symbol');
+      chip.className = 'status-chip status-chip--' + payload.state;
+      word.textContent = payload.label;
+      symbol.textContent = payload.symbol;
+      if (payload.state === 'idle') refresh(); // a dictation just finished -> stats changed
+    });
+    onBridgePush('audio_level', function (payload) {
+      var bars = document.querySelectorAll('#home-meter .meter-bar');
+      (payload.levels || []).forEach(function (lvl, i) {
+        if (bars[i]) bars[i].style.setProperty('--level', lvl);
+      });
+    });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', refresh);
+    else refresh();
+  })();
+</script>
+
+<script>
+  (function () {
+    var navItems = Array.prototype.slice.call(document.querySelectorAll('.nav-item'));
+    var screens = Array.prototype.slice.call(document.querySelectorAll('.screen'));
+    var title = document.getElementById('screen-title');
+
+    function activate(item, focus) {
+      navItems.forEach(function (n) {
+        var isActive = n === item;
+        n.classList.toggle('is-active', isActive);
+        n.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        n.setAttribute('tabindex', isActive ? '0' : '-1');
+        if (isActive) { n.setAttribute('aria-current', 'page'); }
+        else { n.removeAttribute('aria-current'); }
+      });
+      screens.forEach(function (s) {
+        s.classList.toggle('is-visible', s.id === item.dataset.target);
+      });
+      title.textContent = item.dataset.title;
+      if (focus) item.focus();
+    }
+
+    navItems.forEach(function (item, idx) {
+      item.addEventListener('click', function () { activate(item, false); });
+      item.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          var next = e.key === 'ArrowDown'
+            ? navItems[(idx + 1) % navItems.length]
+            : navItems[(idx - 1 + navItems.length) % navItems.length];
+          activate(next, true);
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate(item, false);
+        }
+      });
+    });
+
+    // reduce-motion toggle
+    var toggle = document.getElementById('reduce-motion-toggle');
+    toggle.addEventListener('change', function () {
+      document.documentElement.classList.toggle('reduce-motion', toggle.checked);
+    });
+
+    // chip-row generic behavior (for downstream agents reusing .chip-row)
+    document.addEventListener('click', function (e) {
+      var chip = e.target.closest && e.target.closest('.chip');
+      if (!chip) return;
+      var row = chip.closest('.chip-row');
+      if (!row) return;
+      row.querySelectorAll('.chip').forEach(function (c) {
+        c.classList.remove('is-selected');
+        c.setAttribute('aria-checked', 'false');
+      });
+      chip.classList.add('is-selected');
+      chip.setAttribute('aria-checked', 'true');
+    });
+  })();
+</script>
+
+<!-- ===================== TRAINING & PROFILE - state-preview wiring ===================== -->
+<script>
+  /* ---------- Training & Profile screen wiring ---------- */
+  (function () {
+    var root = document.getElementById('screen-training');
+    if (!root) return;
+
+    var states = Array.prototype.slice.call(root.querySelectorAll('.training-state'));
+    var switchChips = Array.prototype.slice.call(
+      root.querySelectorAll('.training-state-switch .chip')
+    );
+
+    function showState(name) {
+      states.forEach(function (s) {
+        s.classList.toggle('is-active', s.dataset.state === name);
+      });
+      switchChips.forEach(function (c) {
+        var match = c.dataset.state === name;
+        c.classList.toggle('is-selected', match);
+        c.setAttribute('aria-checked', match ? 'true' : 'false');
+      });
+    }
+
+    switchChips.forEach(function (chip) {
+      chip.addEventListener('click', function () { showState(chip.dataset.state); });
+    });
+
+    // any in-state link/button carrying data-goto navigates like real UI would
+    root.querySelectorAll('[data-goto]').forEach(function (el) {
+      el.addEventListener('click', function () { showState(el.dataset.goto); });
+    });
+
+    // no-session: resume vs. start-fresh is progressive disclosure, not two
+    // competing primary buttons - discarding the resume reveals Quick/Full.
+    var discardBtn = document.getElementById('btn-discard-resume');
+    var resumeCard = document.getElementById('no-session-resume-card');
+    var startCard = document.getElementById('no-session-start-card');
+    if (discardBtn) {
+      discardBtn.addEventListener('click', function () {
+        resumeCard.style.display = 'none';
+        startCard.style.display = 'block';
+      });
+    }
+
+    // ---------- Real data (speakeasy/gui/handlers/training.py) ----------
+    function escapeHtml(s) {
+      var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML;
+    }
+
+    function ageText(daysAgo) {
+      if (daysAgo === 0) return 'today';
+      if (daysAgo === 1) return '1 day ago';
+      return daysAgo + ' days ago';
+    }
+
+    function metricsLine(metrics) {
+      if (!metrics) return null;
+      var parts = [];
+      if (metrics.baseline_wer != null && metrics.profile_wer != null) {
+        parts.push((metrics.baseline_wer * 100).toFixed(1) + '% → ' + (metrics.profile_wer * 100).toFixed(1) + '% WER');
+      }
+      if (metrics.baseline_p50_ms != null && metrics.profile_p50_ms != null) {
+        var deltaPct = metrics.baseline_p50_ms > 0
+          ? ((metrics.profile_p50_ms - metrics.baseline_p50_ms) / metrics.baseline_p50_ms) * 100
+          : 0;
+        parts.push('latency ' + Math.round(metrics.baseline_p50_ms) + 'ms → ' + Math.round(metrics.profile_p50_ms) +
+          'ms p50 (' + (deltaPct >= 0 ? '+' : '') + deltaPct.toFixed(0) + '%)');
+      }
+      return parts.length ? parts.join(' · ') : null;
+    }
+
+    function renderActiveProfile(state) {
+      var factEl = document.getElementById('training-active-fact');
+      var detailEl = document.getElementById('training-active-detail');
+      if (!state.has_active) {
+        factEl.innerHTML = 'No profile yet';
+        detailEl.textContent = 'Train your voice below to build your first profile.';
+        return;
+      }
+      var active = state.active;
+      factEl.innerHTML = 'v' + active.version + ' <span class="badge">Active</span>';
+      var line = metricsLine(active.metrics);
+      var detailParts = [];
+      if (line) detailParts.push(line);
+      else detailParts.push(active.n_train_clips + ' train clips · ' + escapeHtml(active.engine));
+      detailParts.push('built ' + ageText(active.days_ago));
+      detailEl.textContent = detailParts.join(' · ');
+    }
+
+    function renderResumeOrStart(state) {
+      if (resumeCard) resumeCard.style.display = state.resumable ? 'block' : 'none';
+      if (startCard) startCard.style.display = state.resumable ? 'none' : 'block';
+    }
+
+    function renderVersionSummary(state) {
+      var summaryEl = document.getElementById('training-version-summary');
+      var n = state.versions.length;
+      if (n === 0) {
+        summaryEl.textContent = 'No versions built yet.';
+        return;
+      }
+      var activeVersion = state.versions.filter(function (v) { return v.is_active; })[0];
+      summaryEl.textContent = n + ' version' + (n === 1 ? '' : 's') + ' built' +
+        (activeVersion ? ' · v' + activeVersion.version + ' is active.' : '.');
+    }
+
+    function versionRowHtml(v) {
+      var metaWer = metricsLine(v.metrics);
+      var werText = metaWer ? metaWer : 'Not benchmarked yet';
+      var badge = v.is_active ? ' <span class="badge" style="margin-left:2px;">Active</span>' : '';
+      var restoreAction = v.is_active
+        ? ''
+        : '<button class="btn-text" data-restore-version="' + v.version + '">Restore this version</button>';
+      return (
+        '<div class="training-version-row" data-version="' + v.version + '">' +
+          '<div class="training-version-main">' +
+            '<span class="training-version-id">v' + v.version + '</span>' +
+            '<div class="training-version-meta">' +
+              '<span class="training-version-meta__wer">' + escapeHtml(werText) + '</span>' + badge +
+              '<span class="training-version-meta__date">Built ' + escapeHtml(ageText(v.days_ago)) + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="training-version-action">' + restoreAction + '</div>' +
+        '</div>'
+      );
+    }
+
+    function renderVersionList(state) {
+      var listEl = document.getElementById('training-version-list');
+      if (!state.versions.length) {
+        listEl.innerHTML = '<p class="card__sub">No versions built yet - start a training session to build v1.</p>';
+        return;
+      }
+      listEl.innerHTML = state.versions.map(versionRowHtml).join('');
+    }
+
+    function render(state) {
+      renderActiveProfile(state);
+      renderResumeOrStart(state);
+      renderVersionSummary(state);
+      renderVersionList(state);
+    }
+
+    function refresh() {
+      return callBridge('training_get_state', {}).then(render).catch(function (e) {
+        console.error('training_get_state failed', e);
+      });
+    }
+
+    var overlayNote = document.getElementById('training-overlay-note');
+    function showOverlayNote(text, isError) {
+      overlayNote.textContent = text;
+      overlayNote.style.display = 'block';
+      overlayNote.classList.toggle('training-overlay-note--error', !!isError);
+    }
+
+    var resumeBtn = document.getElementById('btn-resume-session');
+    if (resumeBtn) {
+      resumeBtn.addEventListener('click', function () {
+        resumeBtn.disabled = true;
+        callBridge('training_resume', {}).then(function () {
+          showOverlayNote('Check the overlay to continue your session.');
+        }).catch(function (e) {
+          console.error('training_resume failed', e);
+          showOverlayNote('Could not resume training: ' + e.message, true);
+        }).then(function () { resumeBtn.disabled = false; });
+      });
+    }
+
+    var startBtn = document.getElementById('btn-start-session');
+    if (startBtn) {
+      startBtn.addEventListener('click', function () {
+        var selectedChip = root.querySelector('#session-length-row .chip.is-selected');
+        var size = (selectedChip && selectedChip.dataset.size) || 'quick';
+        startBtn.disabled = true;
+        callBridge('training_start', { size: size }).then(function () {
+          showOverlayNote('Check the overlay for your first prompt.');
+        }).catch(function (e) {
+          console.error('training_start failed', e);
+          showOverlayNote('Could not start training: ' + e.message, true);
+        }).then(function () { startBtn.disabled = false; });
+      });
+    }
+
+    var versionErrorEl = document.getElementById('training-version-error');
+    root.addEventListener('click', function (e) {
+      var restoreBtn = e.target.closest && e.target.closest('[data-restore-version]');
+      if (!restoreBtn) return;
+      var version = parseInt(restoreBtn.dataset.restoreVersion, 10);
+      restoreBtn.disabled = true;
+      versionErrorEl.style.display = 'none';
+      callBridge('training_restore_version', { version: version }).then(function () {
+        return refresh();
+      }).catch(function (e) {
+        console.error('training_restore_version failed', e);
+        versionErrorEl.textContent = 'Could not restore v' + version + ': ' + e.message;
+        versionErrorEl.style.display = 'block';
+      }).then(function () { restoreBtn.disabled = false; });
+    });
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', refresh);
+    else refresh();
+  })();
+</script>
+
+<!-- ===================== HISTORY SCREEN - track-agent behavior ===================== -->
+<script>
+  (function () {
+    var searchInput = document.getElementById('history-search-input');
+    var modeGroup = document.getElementById('filter-mode');
+    var statusGroup = document.getElementById('filter-status');
+    var listEl = document.getElementById('history-list');
+    var noResultsEl = document.getElementById('history-empty-noresults');
+    var noDataEl = document.getElementById('history-empty-nodata');
+    var countEl = document.getElementById('history-count');
+    var clearBtn = document.getElementById('history-clear-filters');
+    var clearBtn2 = document.getElementById('history-noresults-clear');
+    var liveRegion = document.getElementById('history-live-region');
+    var homeCta = document.getElementById('history-empty-nodata-cta');
+
+    if (!listEl) return; // guard: only run on builds that include the History screen
+
+    // Real backend wiring (speakeasy/gui/handlers/history.py). History has no
+    // search/filter query today -- the handler fetches a generous batch and
+    // filters server-side, so this screen stays a pure renderer of whatever
+    // {entries, total_matching} the bridge call returns.
+    var state = { mode: 'all', status: 'all', query: '' };
+    var debounceTimer = null;
+    var requestSeq = 0; // guards against a slower, older request clobbering a newer one
+    var allCount = null; // cached true total, refreshed whenever no filters are active
+
+    var STATUS_META = {
+      injected: { cls: 'injected', symbol: '✓', word: 'Injected' },
+      clipboard_only: { cls: 'clipboard', symbol: '⧉', word: 'Clipboard Only' },
+      translated: { cls: 'translated', symbol: '🌐', word: 'Translated' },
+      rewrite_failed: { cls: 'rewrite-failed', symbol: '⚠', word: 'Rewrite Failed' },
+      discarded: { cls: 'discarded', symbol: '∅', word: 'Discarded' }
+    };
+
+    function humanize(s) {
+      return (s || '').split('_').map(function (w) {
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      }).join(' ');
+    }
+
+    // Statuses outside the 5 designed chips (e.g. "pending", "translate_raw",
+    // "translate_corrected", "canary") fall back to a neutral chip rather than
+    // a hardcoded set that would silently drop real backend statuses.
+    function statusMeta(status) {
+      return STATUS_META[status] || { cls: 'idle', symbol: '•', word: humanize(status) || 'Unknown' };
+    }
+
+    function modeLabel(mode) {
+      if (mode === 'raw') return 'Raw';
+      if (mode === 'clean') return 'Clean';
+      if (mode === 'translate') return 'Translate';
+      return humanize(mode);
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement('div');
+      d.textContent = (s === null || s === undefined) ? '' : String(s);
+      return d.innerHTML;
+    }
+    function escapeAttr(s) {
+      return escapeHtml(s).replace(/"/g, '&quot;');
+    }
+
+    function rowHtml(entry) {
+      var meta = statusMeta(entry.status);
+      var textClass = entry.status === 'discarded' ? ' history-row__text--muted' : '';
+      var appDisplay = entry.target_app ? escapeHtml(entry.target_app) : '–';
+      var detailId = 'history-detail-' + entry.id;
+      var isFailureNote = entry.status === 'rewrite_failed' && !entry.has_diff;
+      var showDetail = entry.has_diff || isFailureNote;
+
+      var chevronBtn = '';
+      if (showDetail) {
+        var chevronLabel = isFailureNote ? 'Show details' : 'Show original vs. final text';
+        chevronBtn =
+          '<button class="icon-btn icon-btn--chevron" data-action="toggle-diff" aria-expanded="false" ' +
+          'aria-controls="' + detailId + '" aria-label="' + chevronLabel + '" title="Show what changed">⌄</button>';
+      }
+
+      var detailHtml = '';
+      if (showDetail) {
+        var innerDetail;
+        if (isFailureNote) {
+          var failLabel = entry.mode === 'translate' ? 'translation' : 'rewrite';
+          innerDetail =
+            '<p class="history-note"><span class="history-note__icon" aria-hidden="true">⚠</span>' +
+            'The ' + failLabel + ' failed for this dictation - the raw transcript above was used instead.</p>';
+        } else {
+          var finalLabel = entry.mode === 'translate' ? 'Translated' : (entry.mode === 'clean' ? 'Cleaned' : 'Final');
+          var rawLabel = entry.mode === 'translate' ? 'Original' : 'Raw';
+          innerDetail =
+            '<div class="history-diff">' +
+              '<div class="history-diff__col"><div class="card__label">' + rawLabel + '</div>' +
+              '<p class="history-diff__text">' + escapeHtml(entry.raw) + '</p></div>' +
+              '<div class="history-diff__col history-diff__col--final"><div class="card__label">' + finalLabel + '</div>' +
+              '<p class="history-diff__text">' + escapeHtml(entry.rewritten) + '</p></div>' +
+            '</div>';
+        }
+        detailHtml =
+          '<div class="history-row__detail" id="' + detailId + '">' +
+            '<div class="history-row__detail-inner">' + innerDetail + '</div>' +
+          '</div>';
+      }
+
+      return (
+        '<article class="history-row card" data-mode="' + escapeAttr(entry.mode) + '" data-status="' + escapeAttr(entry.status) + '">' +
+          '<div class="history-row__main">' +
+            '<div class="history-row__content">' +
+              '<p class="history-row__text' + textClass + '">"' + escapeHtml(entry.text) + '"</p>' +
+              '<div class="history-row__meta">' +
+                '<span>' + escapeHtml(entry.relative_time) + '</span><span aria-hidden="true">·</span>' +
+                '<span>' + appDisplay + '</span><span aria-hidden="true">·</span>' +
+                '<span class="history-row__mode-tag">' + escapeHtml(modeLabel(entry.mode)) + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="history-row__side">' +
+              '<span class="status-chip status-chip--' + meta.cls + '" aria-label="Status: ' + escapeAttr(meta.word) + '">' +
+                '<span class="status-chip__symbol" aria-hidden="true">' + meta.symbol + '</span>' +
+                '<span class="status-chip__word">' + escapeHtml(meta.word) + '</span>' +
+              '</span>' +
+              '<div class="history-row__actions">' +
+                '<button class="icon-btn" data-action="copy" data-copy-text="' + escapeAttr(entry.text) + '" ' +
+                  'aria-label="Copy transcript" title="Copy transcript">⧉</button>' +
+                chevronBtn +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          detailHtml +
+        '</article>'
+      );
+    }
+
+    // ---- roving-tabindex + arrow-key support for the filter chip-rows
+    // (mirrors the .chip-row keyboard contract described in the foundation) ----
+    function wireChipGroup(group) {
+      var chips = Array.prototype.slice.call(group.querySelectorAll('.chip'));
+      group.addEventListener('keydown', function (e) {
+        var current = chips.indexOf(document.activeElement);
+        if (current === -1) return;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          var next = e.key === 'ArrowRight'
+            ? (current + 1) % chips.length
+            : (current - 1 + chips.length) % chips.length;
+          chips.forEach(function (c, i) { c.setAttribute('tabindex', i === next ? '0' : '-1'); });
+          chips[next].focus();
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          document.activeElement.click();
+        }
+      });
+      group.addEventListener('click', function (e) {
+        var chip = e.target.closest && e.target.closest('.chip');
+        if (!chip) return;
+        chips.forEach(function (c) { c.setAttribute('tabindex', '-1'); });
+        chip.setAttribute('tabindex', '0');
+      });
+    }
+    wireChipGroup(modeGroup);
+    wireChipGroup(statusGroup);
+
+    function resetChipGroup(group) {
+      var chips = Array.prototype.slice.call(group.querySelectorAll('.chip'));
+      chips.forEach(function (c, i) {
+        var selected = i === 0;
+        c.classList.toggle('is-selected', selected);
+        c.setAttribute('aria-checked', selected ? 'true' : 'false');
+        c.setAttribute('tabindex', selected ? '0' : '-1');
+      });
+    }
+
+    function renderEntries(data) {
+      var entries = (data && data.entries) || [];
+      var total = (data && data.total_matching) || 0;
+      var filtersActive = state.mode !== 'all' || state.status !== 'all' || !!state.query;
+      if (!filtersActive) allCount = total;
+
+      if (total === 0) {
+        listEl.hidden = true;
+        listEl.innerHTML = '';
+        noResultsEl.hidden = !filtersActive;
+        noDataEl.hidden = filtersActive;
+        countEl.textContent = '0 dictations';
+        return;
+      }
+
+      noDataEl.hidden = true;
+      noResultsEl.hidden = true;
+      listEl.hidden = false;
+      listEl.innerHTML = entries.map(rowHtml).join('');
+
+      var label = total + (total === 1 ? ' dictation' : ' dictations');
+      if (filtersActive && allCount !== null && allCount !== total) label += ' of ' + allCount;
+      countEl.textContent = label;
+    }
+
+    function fetchAndRender() {
+      var mySeq = ++requestSeq;
+      callBridge('history_get_entries', {
+        search: state.query,
+        mode: state.mode,
+        status: state.status,
+        limit: 200
+      }).then(function (data) {
+        if (mySeq !== requestSeq) return; // superseded by a newer request
+        renderEntries(data);
+      }).catch(function (e) {
+        if (mySeq !== requestSeq) return;
+        console.error('history_get_entries failed', e);
+        listEl.hidden = true;
+        noResultsEl.hidden = true;
+        noDataEl.hidden = true;
+        countEl.textContent = '0 dictations';
+      });
+    }
+
+    searchInput.addEventListener('input', function () {
+      state.query = searchInput.value.trim().toLowerCase();
+      if (debounceTimer) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(fetchAndRender, 200);
+    });
+
+    modeGroup.addEventListener('click', function (e) {
+      var chip = e.target.closest && e.target.closest('.chip');
+      if (!chip) return;
+      state.mode = chip.dataset.value;
+      fetchAndRender();
+    });
+
+    statusGroup.addEventListener('click', function (e) {
+      var chip = e.target.closest && e.target.closest('.chip');
+      if (!chip) return;
+      state.status = chip.dataset.value;
+      fetchAndRender();
+    });
+
+    function clearAll() {
+      state.mode = 'all';
+      state.status = 'all';
+      state.query = '';
+      searchInput.value = '';
+      resetChipGroup(modeGroup);
+      resetChipGroup(statusGroup);
+      fetchAndRender();
+    }
+    clearBtn.addEventListener('click', clearAll);
+    clearBtn2.addEventListener('click', clearAll);
+
+    if (homeCta) {
+      homeCta.addEventListener('click', function () {
+        var homeNav = document.querySelector('.nav-item[data-target="screen-home"]');
+        if (homeNav) homeNav.click();
+      });
+    }
+
+    // ---- per-row copy action (one clear icon-button, not a menu) ----
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('[data-action="copy"]');
+      if (!btn) return;
+      var text = btn.getAttribute('data-copy-text') || '';
+
+      function announceCopied() {
+        btn.classList.add('is-copied');
+        btn.setAttribute('aria-label', 'Copied');
+        if (liveRegion) liveRegion.textContent = 'Transcript copied to clipboard.';
+        window.setTimeout(function () {
+          btn.classList.remove('is-copied');
+          btn.setAttribute('aria-label', 'Copy transcript');
+        }, 1400);
+      }
+
+      callBridge('history_copy_text', { text: text }).then(announceCopied).catch(function (e2) {
+        console.error('history_copy_text failed', e2);
+      });
+    });
+
+    // ---- inline progressive-disclosure: raw-vs-final diff / failure note ----
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('[data-action="toggle-diff"]');
+      if (!btn) return;
+      var expanded = btn.getAttribute('aria-expanded') === 'true';
+      var panel = document.getElementById(btn.getAttribute('aria-controls'));
+      if (!panel) return;
+      btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+      // entering uses ease-decel, leaving uses ease-accel (per motion tokens)
+      panel.style.transitionTimingFunction = expanded ? 'var(--ease-accel)' : 'var(--ease-decel)';
+      panel.classList.toggle('is-expanded', !expanded);
+    });
+
+    fetchAndRender();
+  })();
+</script>
+
+<!-- ===================== MODELS & SYSTEM - engine switching logic ===================== -->
+<script>
+  (function () {
+    var grid = document.getElementById('engine-grid');
+    if (!grid) return; // guard in case this file is merged before the mount point exists
+
+    var cards = Array.prototype.slice.call(grid.querySelectorAll('.engine-card'));
+    var cardByEngine = {};
+    cards.forEach(function (c) { cardByEngine[c.dataset.engine] = c; });
+
+    var toast = document.getElementById('engine-toast');
+    var toastText = document.getElementById('engine-toast-text');
+    var toastIcon = toast.querySelector('[data-role="toast-icon"]');
+    var toastTimer = null;
+
+    var chipEl = document.getElementById('models-chip');
+    var chipSubEl = document.getElementById('models-chip-sub');
+    var ramEl = document.getElementById('models-ram');
+    var ramSubEl = document.getElementById('models-ram-sub');
+
+    var busy = false;          // true while a switch is in flight
+    var pendingEngine = null;  // engine key currently loading, if any
+    var engineLabels = {};     // key -> label, for toast/error copy
+
+    function escapeHtml(s) {
+      var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML;
+    }
+
+    function setState(card, variant, symbol, word) {
+      var chip = card.querySelector('[data-role="state"]');
+      chip.className = 'engine-state engine-state--' + variant;
+      chip.innerHTML = '<span aria-hidden="true">' + symbol + '</span><span data-role="state-word">' + escapeHtml(word) + '</span>';
+    }
+
+    function showProgress(card, caption) {
+      var wrap = card.querySelector('[data-role="progress"]');
+      wrap.hidden = false;
+      var fill = wrap.querySelector('[data-role="progress-fill"]');
+      fill.classList.add('is-indeterminate');
+      wrap.querySelector('[data-role="progress-caption"]').textContent = caption;
+    }
+
+    function hideProgress(card) {
+      card.querySelector('[data-role="progress"]').hidden = true;
+      card.querySelector('[data-role="progress-fill"]').classList.remove('is-indeterminate');
+    }
+
+    function showToast(message, isError) {
+      toastText.textContent = message;
+      toastIcon.textContent = isError ? '⚠' : '✓';
+      toast.classList.toggle('is-error', !!isError);
+      toast.classList.add('is-visible');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        toast.classList.remove('is-visible');
+      }, 3200);
+    }
+
+    function setBusyUI(isBusy) {
+      cards.forEach(function (c) {
+        // the card actively loading stays interactive-looking; only its
+        // sibling is inert while a switch is in flight.
+        if (isBusy && c.dataset.engine !== pendingEngine) c.setAttribute('aria-disabled', 'true');
+        else if (!isBusy) c.removeAttribute('aria-disabled');
+      });
+    }
+
+    function renderCard(card, engine, activeEngine) {
+      var isActive = engine.key === activeEngine;
+      card.querySelector('[data-role="name"]').textContent = engine.label;
+      card.querySelector('[data-role="desc"]').textContent = engine.detail;
+      card.querySelector('[data-role="badge"]').hidden = !engine.is_recommended;
+      card.classList.toggle('is-selected', isActive);
+      card.setAttribute('aria-checked', isActive ? 'true' : 'false');
+      card.setAttribute('tabindex', isActive ? '0' : '-1');
+      card.removeAttribute('aria-disabled');
+      if (isActive) {
+        setState(card, 'active', '✓', 'Active');
+      } else {
+        setState(card, 'ready', '○', 'Ready');
+      }
+      hideProgress(card);
+    }
+
+    function render(state) {
+      chipEl.textContent = state.chip;
+      chipSubEl.textContent = state.chip.indexOf('Apple') === 0 ? 'Apple silicon' : 'Intel';
+      ramEl.textContent = state.ram_gb + ' GB';
+      ramSubEl.textContent = state.chip.indexOf('Apple') === 0 ? 'Unified memory' : 'System memory';
+
+      state.engines.forEach(function (engine) {
+        engineLabels[engine.key] = engine.label;
+        var card = cardByEngine[engine.key];
+        if (card) renderCard(card, engine, state.active_engine);
+      });
+    }
+
+    function refresh() {
+      callBridge('models_get_state', {}).then(render).catch(function (e) {
+        console.error('models_get_state failed', e);
+      });
+    }
+
+    function selectEngine(card) {
+      var engine = card.dataset.engine;
+      if (busy || card.classList.contains('is-selected')) return;
+      busy = true;
+      pendingEngine = engine;
+      setBusyUI(true);
+      setState(card, 'switching', '◐', 'Loading…');
+      showProgress(card, 'Loading ' + (engineLabels[engine] || engine) + '… this can take a moment on first use.');
+
+      callBridge('models_switch_engine', { engine: engine }).then(function (result) {
+        if (result && result.already_active) {
+          // Raced with another switch that landed first -- just resync.
+          busy = false;
+          pendingEngine = null;
+          refresh();
+        }
+        // Otherwise {"started": true} -- real outcome arrives via the
+        // engine_switch_result push event below.
+      }).catch(function (e) {
+        console.error('models_switch_engine failed', e);
+        handleSwitchOutcome({ ok: false, engine: engine, error: String((e && e.message) || e) });
+      });
+    }
+
+    function handleSwitchOutcome(payload) {
+      var card = cardByEngine[payload.engine];
+      if (!card) return;
+      busy = false;
+      pendingEngine = null;
+      setBusyUI(false);
+      hideProgress(card);
+
+      if (payload.ok) {
+        var label = payload.label || engineLabels[payload.engine] || payload.engine;
+        refresh();
+        showToast('Switched to ' + label + '.', false);
+      } else {
+        // Failed switch -- the previously active engine is still active
+        // (the backend never applied the swap). Name the failure on the
+        // card itself (clear error state, not just a stuck spinner) and in
+        // the toast, then leave the other card's "Active" state untouched.
+        var failedLabel = engineLabels[payload.engine] || payload.engine;
+        var errorMessage = payload.error || 'unknown error';
+        setState(card, 'error', '⚠', 'Couldn’t load');
+        card.title = errorMessage;
+        showToast("Couldn't switch to " + failedLabel + ': ' + errorMessage, true);
+      }
+    }
+
+    onBridgePush('engine_switch_result', handleSwitchOutcome);
+
+    cards.forEach(function (card, idx) {
+      card.addEventListener('click', function () { selectEngine(card); });
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          var next = cards[(idx + (e.key === 'ArrowRight' ? 1 : -1) + cards.length) % cards.length];
+          next.focus();
+        } else if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectEngine(card);
+        }
+      });
+    });
+
+    refresh();
+  })();
+</script>
+
+<script>
+  // ===== Mics & Speakers screen (speakeasy/gui/handlers/mics.py) =====
+  //
+  // REAL DATA: only the device list itself. On load (and on "Rescan for
+  // devices") we call callBridge('mics_list_devices', {}), which the Python
+  // side answers with the Mac's actual physical audio input devices via
+  // sounddevice.query_devices() -- no more fictional "Shure MV7"/"Blue Yeti"
+  // placeholders.
+  //
+  // MOCK / UI-ONLY (pending a real diarization backend -- there is NONE in
+  // this codebase: no speaker-profile store, no per-stream translation, no
+  // auto-detection of who is talking): every device row starts in the
+  // "Unassigned" chip/picker state. Clicking a name chip (or "+ New speaker")
+  // only updates local JS state to *simulate* what an assigned/confirmed row
+  // looks like, purely so the existing visual design (assigned-chip,
+  // confirm-chip, picker-block) still has something to show in this design
+  // review build. None of this is backed by a real bridge action -- there is
+  // deliberately no "confirm_speaker" / "assign_speaker" bridge call here
+  // because no such backend exists yet. The live-segments panel below is
+  // untouched, unchanged mock example content for the same reason.
+  (function () {
+    function escapeHtml(s) {
+      var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+    }
+    function initials(name) {
+      var parts = (name || '').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return '?';
+      return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+    }
+
+    var devices = []; // [{index, name, assigned: string|null}]
+    var listEl = document.getElementById('mics-device-list');
+    var summaryEl = document.getElementById('mics-session-summary');
+    var startBtn = document.getElementById('mics-start-btn');
+    var helperEl = document.getElementById('mics-action-helper');
+    var rescanBtn = document.getElementById('mics-rescan-btn');
+
+    var MOCK_SPEAKER_CHOICES = ['Speaker A', 'Speaker B', 'Speaker C']; // local mock picker options only
+
+    function renderSummary() {
+      var total = devices.length;
+      var assigned = devices.filter(function (d) { return d.assigned; }).length;
+      var unassigned = total - assigned;
+      if (!total) {
+        summaryEl.innerHTML = '<strong>No microphones detected.</strong> Plug in a device and rescan.';
+        startBtn.setAttribute('disabled', 'disabled');
+        helperEl.textContent = 'No input devices available to start a session';
+        return;
+      }
+      summaryEl.innerHTML = '<strong>' + total + ' microphone' + (total === 1 ? '' : 's') + ' detected</strong>' +
+        ' - ' + assigned + ' assigned, ' + unassigned + ' unassigned.';
+      if (unassigned > 0) {
+        startBtn.setAttribute('disabled', 'disabled');
+        helperEl.textContent = 'Assign ' + unassigned + ' microphone' + (unassigned === 1 ? '' : 's') + ' below to start';
+      } else {
+        startBtn.removeAttribute('disabled');
+        helperEl.textContent = 'All microphones assigned';
+      }
+    }
+
+    function rowMarkup(device) {
+      var picker = device.index + '-picker-label';
+      var assignmentHtml;
+      if (device.assigned) {
+        assignmentHtml =
+          '<span class="assigned-chip">' +
+            '<span class="assigned-chip__avatar" aria-hidden="true">' + escapeHtml(initials(device.assigned)) + '</span>' +
+            '<span class="assigned-chip__name">' + escapeHtml(device.assigned) + '</span>' +
+          '</span>' +
+          '<button class="btn-text" data-action="unassign" data-index="' + device.index + '">Not ' + escapeHtml(device.assigned) + ' - change</button>';
+      } else {
+        assignmentHtml =
+          '<span class="assigned-chip assigned-chip--unassigned">' +
+            '<span class="assigned-chip__avatar" aria-hidden="true">?</span>' +
+            '<span class="assigned-chip__name">Unassigned</span>' +
+          '</span>' +
+          '<div class="picker-block">' +
+            '<span class="picker-label" id="' + picker + '">Assign this microphone to</span>' +
+            '<div class="picker-row">' +
+              '<div class="chip-row" role="radiogroup" aria-labelledby="' + picker + '">' +
+                MOCK_SPEAKER_CHOICES.map(function (name) {
+                  return '<button class="chip" role="radio" aria-checked="false" data-action="assign" ' +
+                    'data-index="' + device.index + '" data-name="' + escapeHtml(name) + '">' + escapeHtml(name) + '</button>';
+                }).join('') +
+              '</div>' +
+              '<button class="chip chip--new" type="button" data-action="assign-new" data-index="' + device.index + '">+ New speaker</button>' +
+            '</div>' +
+          '</div>';
+      }
+      return (
+        '<div class="mic-row" data-index="' + device.index + '">' +
+          '<div class="mic-row__device">' +
+            '<span class="mic-device-icon" aria-hidden="true">🎙</span>' +
+            '<div>' +
+              '<div class="mic-row__name">' + escapeHtml(device.name) + '</div>' +
+              '<div class="mic-row__meta">Detected input device</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="mic-row__meter-wrap">' +
+            '<div class="meter" aria-hidden="true">' +
+              '<span class="meter-bar" style="--level:0.08"></span>' +
+              '<span class="meter-bar" style="--level:0.06"></span>' +
+              '<span class="meter-bar" style="--level:0.1"></span>' +
+              '<span class="meter-bar" style="--level:0.07"></span>' +
+              '<span class="meter-bar" style="--level:0.05"></span>' +
+            '</div>' +
+            '<span class="visually-hidden">Audio level: idle</span>' +
+            '<span class="meter-caption">Idle</span>' +
+          '</div>' +
+          '<div class="mic-row__assignment">' + assignmentHtml + '</div>' +
+        '</div>'
+      );
+    }
+
+    function render() {
+      if (!devices.length) {
+        listEl.innerHTML = '<p class="card__sub" style="padding: var(--space-3) 0;">No input devices detected.</p>';
+      } else {
+        listEl.innerHTML = devices.map(rowMarkup).join('');
+      }
+      renderSummary();
+    }
+
+    // Event delegation -- rows are re-rendered wholesale on every state
+    // change, so handlers are bound once on the container, not per-row.
+    listEl.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      var idx = Number(btn.getAttribute('data-index'));
+      var device = devices.filter(function (d) { return d.index === idx; })[0];
+      if (!device) return;
+      var action = btn.getAttribute('data-action');
+      if (action === 'assign') {
+        device.assigned = btn.getAttribute('data-name');
+      } else if (action === 'assign-new') {
+        var name = window.prompt('New speaker name (local to this session only):');
+        if (name && name.trim()) device.assigned = name.trim();
+        else return;
+      } else if (action === 'unassign') {
+        device.assigned = null;
+      }
+      render();
+    });
+
+    function loadDevices() {
+      summaryEl.innerHTML = '<strong>Detecting microphones…</strong>';
+      helperEl.textContent = 'Looking for input devices…';
+      callBridge('mics_list_devices', {}).then(function (result) {
+        devices = (result.devices || []).map(function (d) {
+          return { index: d.index, name: d.name, assigned: null };
+        });
+        render();
+      }).catch(function (e) {
+        console.error('mics_list_devices failed', e);
+        listEl.innerHTML = '<p class="card__sub" style="padding: var(--space-3) 0;">Could not detect microphones.</p>';
+        summaryEl.innerHTML = '<strong>Could not detect microphones.</strong>';
+        startBtn.setAttribute('disabled', 'disabled');
+        helperEl.textContent = 'Device detection unavailable';
+      });
+    }
+
+    rescanBtn.addEventListener('click', loadDevices);
+
+    // These three are shown as clickable (Start Session even reaches an
+    // enabled state once every mic is "assigned") but there is nothing real
+    // behind any of them -- no session backend, no speaker-profile store.
+    // A silently-dead button is worse than an honest message: clicking
+    // must always say plainly that this part is a preview, never do nothing.
+    function explainPreview() {
+      window.alert('Multi-speaker sessions aren\'t built yet -- this screen is a preview of the planned design. Only the microphone list above is real.');
+    }
+    startBtn.addEventListener('click', explainPreview);
+    var refine1 = document.getElementById('mics-refine-example-1');
+    var refine2 = document.getElementById('mics-refine-example-2');
+    if (refine1) refine1.addEventListener('click', explainPreview);
+    if (refine2) refine2.addEventListener('click', explainPreview);
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadDevices);
+    else loadDevices();
+  })();
+</script>
+</body>
+</html>

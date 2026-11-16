@@ -1,0 +1,37 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.egg-info/
+.DS_Store
+.claude/worktrees/
+evidence/
+
+# NX workspace
+node_modules/
+.nx/cache/
+.nx/workspace-data/
+*.local.log
+
+# one-time mobile pairing codes (never commit)
+docs/mobile/PAIRING-NEXT.md
+
+# --- local deployment profile & secrets: never commit (see docs/PROFILE.md) ---
+profile.json
+/profile/
+.speakeasy-profile/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+*.apk
+.speakeasy/
+google-services.json
+GoogleService-Info.plist
+local.properties
+keystore.properties

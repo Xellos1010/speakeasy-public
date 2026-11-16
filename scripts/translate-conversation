@@ -1,0 +1,17 @@
+#!/bin/bash
+# Thin shim for translating a recorded conversation to English.
+#
+# Usage:
+#   scripts/translate-conversation <audio> [--out out.md] [--polish] [--language es]
+#
+# Runs speakeasy/translate_file.py against the repo's venv if present,
+# otherwise falls back to whatever `python3` is on PATH.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="$DIR/.venv/bin/python"
+if [ ! -x "$PY" ]; then
+  PY="python3"
+fi
+export SSL_CERT_FILE="${SSL_CERT_FILE:-/etc/ssl/cert.pem}"
+cd "$DIR"
+exec env PYTHONPATH="$DIR" "$PY" -m speakeasy.translate_file "$@"

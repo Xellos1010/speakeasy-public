@@ -1,0 +1,29 @@
+# speakeasy network STT service -- systemd USER unit template.
+#
+# This file is a template, not installed or enabled automatically by anything
+# in this repo (that's a deliberate system-level change requiring explicit
+# operator action -- see README's "Network service (Linux)" section for the
+# install steps). Runs as a long-running process independent of the
+# menu-bar/dictation client (docs/superpowers/specs/2026-08-18-r5.3-and-service-entrypoint.md
+# "separate long-running process" decision): this host's value as an
+# inference host for other machines shouldn't depend on whether the local
+# dictation app happens to be open.
+#
+# EDIT BEFORE INSTALLING: WorkingDirectory/ExecStart below assume this repo
+# is checked out at ~/Projects/speakeasy with a venv at .venv -- adjust both
+# paths to match your actual checkout if different.
+
+[Unit]
+Description=speakeasy network STT service (tailnet-only; binds only to the tailscale interface)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/speakeasy
+ExecStart=%h/Projects/speakeasy/.venv/bin/python -m speakeasy.service
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

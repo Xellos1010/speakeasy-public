@@ -1,0 +1,17 @@
+{
+  "name": "speakeasy-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "NX workspace wrapper for the speakeasy Python menu-bar dictation app",
+  "scripts": {
+    "test": "nx run speakeasy:test",
+    "lint": "nx run speakeasy:lint"
+  },
+  "devDependencies": {
+    "nx": "23.3.2"
+  },
+  "overrides": {
+    "undici": "7.30.2"
+  }
+}

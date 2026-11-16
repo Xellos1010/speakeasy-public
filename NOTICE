@@ -1,0 +1,10 @@
+SpeakEasy
+Copyright 2026 Xellos1010
+
+This product includes software developed by Xellos1010.
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party software is not redistributed in this repository. Dependencies are installed from their
+own package indexes under their own licenses. Note: on Linux, the optional dependencies pynput
+(LGPL-3.0) and python-xlib (LGPL-2.1-or-later) are installed by pip and imported dynamically; they are
+not bundled or modified here.

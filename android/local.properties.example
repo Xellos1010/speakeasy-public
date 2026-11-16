@@ -1,0 +1,11 @@
+## Copy to android/local.properties (gitignored) and edit. Values here are per-machine settings,
+## never secrets: the keystore password is read from the environment variable NAMED below.
+# Android SDK location (Android Studio writes this for you)
+sdk.dir=/path/to/Android/sdk
+# Default server URL baked into the app. Leave empty to pair by scanning the QR from `speakeasy pair`.
+speakeasy.serverUrl=https://your-host.example.com:8445
+# Release signing (optional; debug builds need none)
+speakeasy.keystore=keystore/speakeasy-release.jks
+speakeasy.keyAlias=speakeasy
+# NAME of the environment variable that holds the keystore password (not the password)
+speakeasy.storePasswordEnv=SPK_KS_PW

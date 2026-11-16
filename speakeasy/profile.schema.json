@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "speakeasy-deployment-profile/1",
+  "title": "SpeakEasy deployment profile",
+  "description": "Per-deployment settings that live OUTSIDE the repository: hostnames, addresses, paths, and the NAMES of secrets. Never put a secret value in a profile.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"type": "integer", "enum": [1]},
+    "profile_name": {"type": "string", "minLength": 1, "maxLength": 64},
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Mobile API as phones reach it.",
+      "properties": {
+        "public_url": {"type": "string", "pattern": "^https://[^\\s/]+(:[0-9]+)?$",
+                       "description": "Base URL a paired phone uses, e.g. https://my-host.my-tailnet.example:8445 (scheme + host + optional port, no path)."}
+      }
+    },
+    "hosts": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Multi-host network STT (see docs/superpowers/specs/2026-08-18-network-service.md).",
+      "properties": {
+        "inference_ranking": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "host_addresses": {
+          "type": "object",
+          "additionalProperties": {"type": "string", "pattern": "^[^\\s:]+:[0-9]{1,5}$"},
+          "description": "host id -> ip-or-hostname:port"
+        }
+      }
+    },
+    "accounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accounts_file": {"type": "string", "minLength": 1,
+                          "description": "Path to the Claude accounts JSON used by rewrite modes (default ~/.claude-accounts.json)."}
+      }
+    },
+    "operator_overlay": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$"},
+        "dir": {"type": "string", "minLength": 1}
+      }
+    },
+    "android": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "server_url": {"type": "string", "pattern": "^https://[^\\s/]+(:[0-9]+)?$"},
+        "keystore_path": {"type": "string", "minLength": 1},
+        "key_alias": {"type": "string", "minLength": 1},
+        "store_password_env": {"$ref": "#/$defs/env_name"},
+        "key_password_env": {"$ref": "#/$defs/env_name"}
+      }
+    },
+    "packaging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bundle_id": {"type": "string", "pattern": "^[A-Za-z0-9.-]{3,128}$",
+                      "description": "CFBundleIdentifier of the packaged macOS app (default org.speakeasy.dictation)."},
+        "sign_identity": {"type": "string", "minLength": 1},
+        "sign_keychain": {"type": "string", "minLength": 1},
+        "sign_keychain_password_env": {"$ref": "#/$defs/env_name"}
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "description": "Documentation of where each secret lives. NAMES ONLY.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "name"],
+        "properties": {
+          "source": {"type": "string", "enum": ["env", "keychain", "file"]},
+          "name": {"type": "string", "minLength": 1, "maxLength": 128}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "env_name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+                 "description": "Name of an environment variable that holds the secret. Never the secret itself."}
+  }
+}

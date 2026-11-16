@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/nx/schemas/project-schema.json",
+  "name": "speakeasy",
+  "root": ".",
+  "sourceRoot": "speakeasy",
+  "projectType": "application",
+  "tags": ["scope:speakeasy", "type:python-app"],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "PYTHONPATH=. .venv/bin/python -m pytest -q",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "test-integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "PYTHONPATH=. .venv/bin/python -m pytest -m integration -q",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "if .venv/bin/python -m ruff --version >/dev/null 2>&1; then .venv/bin/python -m ruff check speakeasy; else echo 'ruff not installed in .venv; falling back to compileall placeholder (see docs/adr/0001-nx-workspace.md)'; .venv/bin/python -m compileall speakeasy; fi",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "PYTHONPATH=. .venv/bin/python -m speakeasy",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "e2e": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "PYTHONPATH=. .venv/bin/python scripts/e2e_stickies.py raw",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

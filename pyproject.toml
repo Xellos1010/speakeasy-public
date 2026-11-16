@@ -1,0 +1,49 @@
+[project]
+name = "speakeasy"
+version = "0.1.0"
+description = "Local dictation with universal text injection"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Xellos1010" }]
+requires-python = ">=3.11"
+dependencies = [
+  "sherpa-onnx>=1.13.4",
+  "sounddevice>=0.4.6",
+  "numpy>=1.26",
+  "PyYAML>=6.0",
+  "jiwer>=3.0",
+  "rapidfuzz>=3.0",
+  # macOS-only: hotkey capture, text injection, menu-bar UI (rumps).
+  "rumps>=0.4; sys_platform == 'darwin'",
+  "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
+  "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
+  "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
+  "pyobjc-framework-WebKit>=10.0; sys_platform == 'darwin'",
+  # Linux-only: X11 hotkey capture (speakeasy.hotkey_linux) + clipboard
+  # injection (speakeasy.injector_linux). Paste itself shells out to
+  # xdotool, a system package documented in README's Linux requirements
+  # rather than pip-installed, same as macOS's Homebrew portaudio.
+  "pynput>=1.7; sys_platform == 'linux'",
+  "python-xlib>=0.33; sys_platform == 'linux'",
+]
+
+[project.scripts]
+speakeasy = "speakeasy.mobile.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+markers = ["integration: needs model files / audio hardware"]
+addopts = "-m 'not integration'"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["speakeasy", "speakeasy.assets", "speakeasy.engine", "speakeasy.training", "speakeasy.gui", "speakeasy.gui.handlers", "speakeasy.mobile"]
+
+[tool.setuptools.package-data]
+"speakeasy" = ["profile.schema.json"]
+"speakeasy.assets" = ["*.wav"]

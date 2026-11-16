@@ -1,0 +1,18 @@
+#!/bin/bash
+# Thin shim for live near-real-time speech translation/transcription.
+#
+# Usage:
+#   scripts/live-translate [--mode translate|transcribe] [--out session.md]
+#                          [--polish-at-end] [--device N] [--input-wav f.wav] [--stats]
+#
+# Runs speakeasy/live_translate.py against the repo's venv if present,
+# otherwise falls back to whatever `python3` is on PATH.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="$DIR/.venv/bin/python"
+if [ ! -x "$PY" ]; then
+  PY="python3"
+fi
+export SSL_CERT_FILE="${SSL_CERT_FILE:-/etc/ssl/cert.pem}"
+cd "$DIR"
+exec env PYTHONPATH="$DIR" "$PY" -m speakeasy.live_translate "$@"

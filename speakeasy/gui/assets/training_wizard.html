@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpeakEasy voice training</title>
+<!--
+Real integration of the Gate -1 mockup (see the work order's
+GATE-MINUS-1-SPEC.md for the full design contract this honors). This file
+is loaded by speakeasy/gui/wizard_window.py's WKWebView; every screen's
+data comes from the shared JS<->Python bridge (window.callBridge /
+window.onBridgePush, defined in the foundation script at the bottom of
+this file, copied verbatim from speakeasy/gui/assets/app.html) and from
+speakeasy/gui/handlers/training_wizard.py's real handlers -- there is no
+demo/simulation object anywhere in this file.
+
+Deviations from the mockup (see the work order report for the full list):
+  - Playback of the in-review take (ADJ-SPK-035) via sounddevice.play(),
+    already a core dependency (speakeasy/audio.py records with it) --
+    no new dependency. No scrub/seek: play/replay only (a repeated Play
+    click restarts rather than seeks), which is the scope this was folded
+    in under.
+  - No live waveform canvas: the real per-tick signal
+    (speakeasy/gui/handlers/training_wizard.py's wizard_level push) is a
+    small weighted bar-heights array (the SAME shape as the existing
+    Home-window "audio_level" push), rendered as a simple bar meter.
+  - The mockup's demo drawer (force-QC chips, state-jump buttons) is
+    removed entirely: there is no live backend to force a QC verdict
+    against, so those controls had nothing real left to control.
+  - Distinct mic-permission-denied / recorder-busy screens are collapsed
+    into one generic real-error card (see showBridgeError): no backend
+    signal distinguishes those specific reasons today, and fabricating the
+    distinction would violate the "every number maps to a real field"
+    honesty rule.
+  - The mockup's separate "skipped for now" screen is folded into the
+    QC-failure card (see showQcFail): the real TrainingFlowController
+    contract has exactly one failure callback (show_qc_failure), not a
+    distinct skip event.
+-->
+<style>
+:root {
+  --floor: 12px;
+  --bg: #f4f2ee; --card: #ffffff; --ink: #201c17; --ink2: #6b645a;
+  --line: #ddd7cd; --soft: #ece8e0; --accent: #b34605; --accent-ink: #ffffff;
+  --signal: #0e7c6d; --good: #1e6e46; --warn: #8a5a00; --bad: #8f2e2e;
+  --focus: #1c4f8f;
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@supports (color: oklch(0 0 0)) {
+  :root {
+    --accent: oklch(0.52 0.16 45); --signal: oklch(0.55 0.1 180);
+  }
+}
+[data-theme="dark"] {
+  --bg: #16181c; --card: #1f2228; --ink: #ebe7e0; --ink2: #a09a90;
+  --line: #33373e; --soft: #262a31; --accent: #e0692a; --accent-ink: #1a0d04;
+  --signal: #3fc2ab; --good: #56b183; --warn: #d3a13f; --bad: #d07f7f;
+  --focus: #7fb0dd;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  display: flex; flex-direction: column;
+}
+button { font: inherit; color: inherit; }
+button:focus-visible, [tabindex]:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px;
+}
+
+/* ---------- header: landmark + progress (Command Center strip) ---------- */
+header {
+  display: flex; align-items: center; gap: 16px; padding: var(--floor) 20px;
+  border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.brand { font-weight: 800; letter-spacing: .01em; }
+.brand small { display: block; font-weight: 500; color: var(--ink2); font-size: .74em; }
+.ringwrap { display: flex; align-items: center; gap: 10px; }
+.ring { width: 44px; height: 44px; }
+.ring .track { stroke: var(--line); }
+.ring .fill { stroke: var(--signal); transition: stroke-dashoffset 300ms ease-out; }
+.ring text { fill: var(--ink); font-size: 11px; font-weight: 700; }
+.ring.pulse { animation: ringpulse 350ms var(--spring); }
+@keyframes ringpulse { 0% { transform: scale(1); } 50% { transform: scale(1.0547); } 100% { transform: scale(1); } }
+.counts { font-size: .85em; color: var(--ink2); min-width: 110px; }
+.counts b { color: var(--ink); font-size: 1.15em; }
+.streak { font-size: .8em; color: var(--ink2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 12px; }
+.streak b { color: var(--ink); }
+.hdr-tools { margin-left: auto; display: flex; gap: 8px; }
+.hdr-tools button {
+  border: 1px solid var(--line); background: var(--card); color: var(--ink2);
+  border-radius: 8px; padding: 6px 10px; font-size: .78em; cursor: pointer;
+  min-height: 32px;
+}
+#milestone {
+  width: 100%; font-size: .85em; color: var(--good); font-weight: 700; display: none;
+}
+#milestone.show { display: block; animation: fadein 250ms ease-out; }
+@keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ---------- per-prompt tick rail (collapsible, persisted) ---------- */
+.rail { padding: 8px 20px; border-bottom: 1px solid var(--line); }
+.rail-head { display: flex; align-items: center; gap: 8px; font-size: .78em; color: var(--ink2); }
+.rail-head button { border: none; background: none; color: var(--ink2); cursor: pointer;
+  text-decoration: underline; padding: 4px; min-height: 24px; }
+.cells { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+.rail.collapsed .cells { display: none; }
+.cell { width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--line);
+  background: var(--card); display: inline-flex; align-items: center; justify-content: center; }
+.cell.current { border-color: var(--ink); border-width: 2px; }
+.cell.accepted { background: var(--signal); border-color: var(--signal); }
+.cell.low_quality { background: var(--soft); }
+.cell svg { width: 11px; height: 11px; }
+.cell.accepted.pop svg { animation: pop 300ms var(--spring); }
+@keyframes pop { from { transform: scale(0.6); } to { transform: scale(1); } }
+
+/* ---------- stage card ---------- */
+main { flex: 1; overflow-y: auto; display: flex; justify-content: center; padding: 20px; }
+.stagecard {
+  width: 100%; max-width: 560px; background: var(--card); border: 1px solid var(--line);
+  border-radius: 16px; padding: clamp(18px, 4vw, 30px); align-self: flex-start;
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+}
+.stagecard.advance { animation: stepin 250ms ease-out; }
+@keyframes stepin { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+.stepname { font-size: .78em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink2); margin: 0 0 10px; }
+h1 { font-size: clamp(1.25em, 3.5vw, 1.5em); margin: 0 0 8px; }
+.lede { color: var(--ink2); margin: 0 0 18px; }
+.sentence {
+  font-size: clamp(1.35em, 4vw, 1.7em); line-height: 1.4; font-weight: 600; margin: 14px 0 18px;
+}
+.srcchip { display: inline-flex; align-items: center; gap: 6px; font-size: .78em;
+  color: var(--ink2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+
+/* choice cards (welcome): visible, tappable, no dropdowns */
+.choices { display: flex; flex-direction: column; gap: 12px; margin: 18px 0; }
+.choice {
+  text-align: left; display: flex; gap: 14px; align-items: center; cursor: pointer;
+  border: 1.5px solid var(--line); background: var(--card); border-radius: 12px;
+  padding: 14px 16px; min-height: 64px; width: 100%;
+}
+.choice .kbd { margin-left: auto; }
+.choice b { display: block; }
+.choice small { color: var(--ink2); }
+.choice.primary { border-color: var(--accent); }
+.choice.primary .tag { background: var(--accent); color: var(--accent-ink);
+  font-size: .68em; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
+
+/* buttons: exactly one primary per state carries the warm accent */
+.actions { display: flex; gap: 12px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+.btn-primary {
+  background: var(--accent); color: var(--accent-ink); border: none; border-radius: 10px;
+  padding: 12px 22px; font-weight: 700; font-size: 1em; cursor: pointer; min-height: 44px;
+}
+.btn-secondary {
+  background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 10px;
+  padding: 11px 16px; cursor: pointer; min-height: 44px;
+}
+.btn-quiet { background: none; border: none; color: var(--ink2); cursor: pointer;
+  text-decoration: underline; min-height: 44px; }
+.kbd { font-size: .72em; color: var(--ink2); border: 1px solid var(--line);
+  border-radius: 5px; padding: 1px 6px; background: var(--soft); }
+
+/* recording: real level bars (wizard_level push), not a simulated envelope */
+.wavebox { position: relative; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--soft); overflow: hidden; padding: 12px; }
+.levelbars { display: flex; align-items: flex-end; justify-content: center; gap: 6px; height: 72px; }
+.levelbars .bar { width: 18px; border-radius: 4px 4px 0 0; background: var(--signal);
+  transition: height 120ms ease-out; }
+.recrow { display: flex; align-items: center; gap: 14px; margin: 12px 0 0; font-size: .9em; }
+.livedot { color: var(--bad); font-weight: 700; }
+.rm-level { display: none; font-size: .9em; color: var(--ink2); padding: 10px 12px; }
+
+/* review */
+.qcfacts { display: flex; gap: 14px; flex-wrap: wrap; font-size: .82em; color: var(--ink2);
+  margin-top: 10px; }
+.qcfacts span b { color: var(--good); font-weight: 700; }
+
+/* qc failure: transparent recovery, forgiving pips */
+.pips { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+.pip { width: 12px; height: 12px; border-radius: 999px; border: 1.5px solid var(--line); }
+.pip.used { background: var(--ink2); border-color: var(--ink2); }
+.wwn { margin: 10px 0 0; padding: 0; list-style: none; font-size: .92em; }
+.wwn li { margin: 6px 0; display: flex; gap: 8px; }
+.wwn .k { min-width: 52px; font-weight: 700; color: var(--ink2); font-size: .82em;
+  text-transform: uppercase; letter-spacing: .05em; padding-top: 2px; }
+.statusword { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; }
+.statusword.warn { color: var(--warn); } .statusword.good { color: var(--good); }
+.statusword.bad { color: var(--bad); }
+
+/* summary */
+.facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0; }
+.fact { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.fact b { font-size: 1.5em; display: block; }
+.fact small { color: var(--ink2); }
+.celebratetick { width: 52px; height: 52px; color: var(--good); }
+.celebratetick.pop { animation: pop 300ms var(--spring); }
+details.evidence { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+details.evidence summary { cursor: pointer; color: var(--ink2); font-size: .88em; }
+.evlist { font-size: .8em; margin: 8px 0 0; width: 100%; border-collapse: collapse; }
+.evlist td, .evlist th { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+
+/* footer */
+footer { border-top: 1px solid var(--line); padding: 8px 20px; display: flex; gap: 16px;
+  flex-wrap: wrap; align-items: center; font-size: .74em; color: var(--ink2); }
+
+/* reduced motion: static end states, not a speed cut (media query AND in-app toggle) */
+@media (prefers-reduced-motion: reduce) {
+  .ring .fill { transition: none; }
+  .ring.pulse, .cell.accepted.pop svg, .stagecard.advance, #milestone.show,
+  .celebratetick.pop { animation: none; }
+  .levelbars { display: none; }
+  .rm-level { display: block; }
+}
+body.rm .ring .fill { transition: none; }
+body.rm .ring.pulse, body.rm .cell.accepted.pop svg, body.rm .stagecard.advance,
+body.rm #milestone.show, body.rm .celebratetick.pop { animation: none; }
+body.rm .levelbars { display: none; }
+body.rm .rm-level { display: block; }
+
+@media print {
+  header .hdr-tools, .rail, footer, .actions { display: none !important; }
+  body { background: #fff; color: #000; }
+  .stagecard { border: none; box-shadow: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand" data-i18n="app.brand">SpeakEasy
+    <small data-i18n="app.area">Voice training</small>
+  </div>
+  <div class="ringwrap">
+    <svg class="ring" id="ring" viewBox="0 0 44 44" role="img" aria-label="Session progress">
+      <circle class="track" cx="22" cy="22" r="17" fill="none" stroke-width="5"></circle>
+      <circle class="fill" id="ringfill" cx="22" cy="22" r="17" fill="none" stroke-width="5"
+        stroke-linecap="round" stroke-dasharray="106.8" stroke-dashoffset="106.8"
+        transform="rotate(-90 22 22)"></circle>
+      <text id="ringpct" x="22" y="26" text-anchor="middle">0%</text>
+    </svg>
+    <div class="counts"><b id="c-done">0</b> of <span id="c-total">0</span> accepted<br>
+      <span id="c-skipped">0 skipped</span></div>
+  </div>
+  <div class="streak" id="streak" title="Consecutive sentences accepted on the first take">
+    First-take streak: <b id="streakn">0</b></div>
+  <div class="hdr-tools">
+    <button id="themebtn" aria-label="Cycle color theme">Theme: Auto</button>
+    <button id="rmbtn" aria-pressed="false" data-i18n="tool.reducemotion">Reduce motion</button>
+  </div>
+  <div id="milestone" role="status"></div>
+</header>
+
+<div class="rail" id="rail">
+  <div class="rail-head">
+    <span data-i18n="rail.label">Sentences this session</span>
+    <button id="railbtn" aria-expanded="true">Hide</button>
+  </div>
+  <div class="cells" id="cells"></div>
+</div>
+
+<main><div class="stagecard" id="stage" aria-live="off"></div></main>
+
+<div id="announcer" role="status" aria-live="polite" style="position:absolute;left:-9999px;"></div>
+
+<footer>
+  <span><span class="kbd">Space</span> record / stop</span>
+  <span><span class="kbd">Enter</span> accept</span>
+  <span><span class="kbd">P</span> play back</span>
+  <span><span class="kbd">R</span> re-record</span>
+</footer>
+
+<script>
+  // ===== Shared Python bridge helper (speakeasy/gui/window.py protocol) =====
+  // Copied verbatim from speakeasy/gui/assets/app.html's foundation script:
+  // every screen's real-data wiring goes through callBridge(action, payload)
+  // -> Promise<result>; Python responds via window.__bridgeResponse and
+  // pushes real-time events via window.__bridgePush/window.onBridgePush.
+  // This wizard window posts to its OWN native handler name ("wizardBridge",
+  // speakeasy/gui/wizard_window.py) instead of the Home window's "bridge".
+  // Must run BEFORE the state-machine script below, which calls
+  // callBridge()/onBridgePush() synchronously at load time (boot()).
+  (function () {
+    var pending = {};
+    var nextId = 1;
+    window.__bridgeResponse = function (id, response) {
+      var entry = pending[id];
+      if (!entry) return;
+      delete pending[id];
+      if (response && response.ok) entry.resolve(response.result);
+      else entry.reject(new Error((response && response.error) || 'bridge error'));
+    };
+    var pushListeners = {};
+    window.__bridgePush = function (event, payload) {
+      (pushListeners[event] || []).forEach(function (fn) { fn(payload); });
+    };
+    window.onBridgePush = function (event, fn) {
+      (pushListeners[event] = pushListeners[event] || []).push(fn);
+    };
+    window.callBridge = function (action, payload) {
+      return new Promise(function (resolve, reject) {
+        var id = 'req' + (nextId++);
+        pending[id] = { resolve: resolve, reject: reject };
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.wizardBridge) {
+          window.webkit.messageHandlers.wizardBridge.postMessage({ id: id, action: action, payload: payload || {} });
+        } else {
+          delete pending[id];
+          reject(new Error('callBridge: no native bridge present (design-preview mode)'));
+        }
+      });
+    };
+  })();
+</script>
+
+<script>
+(function () {
+"use strict";
+
+/* ------------------------------------------------------------------ i18n */
+var I18N = {
+  "app.brand": "SpeakEasy", "app.area": "Voice training",
+  "tool.reducemotion": "Reduce motion",
+  "rail.label": "Sentences this session"
+};
+Array.prototype.forEach.call(document.querySelectorAll("[data-i18n]"), function (el) {
+  var k = el.getAttribute("data-i18n");
+  if (I18N[k]) { el.textContent = I18N[k]; }
+});
+
+var NS = "spk-train-wizard:";
+function store(k, v) { try { localStorage.setItem(NS + k, v); } catch (e) {} }
+function read(k) { try { return localStorage.getItem(NS + k); } catch (e) { return null; } }
+
+var SRC_LABEL = {
+  harvard: "Phonetic coverage sentence",
+  vocab: "From your vocabulary",
+  correction: "SpeakEasy got this wrong before"
+};
+
+/* ------------------------------------------------------------- utilities */
+function $(id) { return document.getElementById(id); }
+function announce(msg) { $("announcer").textContent = msg; }
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+function svgTick(cls) {
+  return '<svg class="' + (cls || "") + '" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+    '<path d="M4 12.5 10 18.5 20 6.5" stroke="currentColor" stroke-width="3" ' +
+    'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+/* ------------------------------------------------------- session state --
+   `snapshot` is always the last real training_wizard_get_state (or
+   start/resume) result -- the single source of truth for prompts/counts.
+   `uiState` is purely a display mode; it never carries data of its own
+   beyond what a push event handed it (qcFailData/reviewData/summaryData
+   below), and none of that data is ever fabricated locally. */
+var snapshot = null;
+var uiState = "boot";
+var busy = false;
+var lastFracSeen = 0;      // for honest, once-per-real-crossing milestones
+var milestonesFired = { 0.25: false, 0.5: false, 0.75: false };
+
+/* --------------------------------------------------------------- header */
+var CIRC = 106.8;
+function computeStreak(prompts) {
+  var streak = 0;
+  for (var i = 0; i < prompts.length; i++) {
+    var p = prompts[i];
+    if (p.status === "pending") { break; }
+    if (p.status === "accepted" && p.attempts === 1) { streak += 1; } else { streak = 0; }
+  }
+  return streak;
+}
+function renderHeader(popRing) {
+  var done = snapshot ? snapshot.accepted : 0;
+  var total = snapshot ? snapshot.total : 0;
+  var frac = total ? done / total : 0;
+  $("ringfill").setAttribute("stroke-dashoffset", String(CIRC * (1 - frac)));
+  $("ringpct").textContent = Math.round(frac * 100) + "%";
+  $("c-done").textContent = String(done);
+  $("c-total").textContent = String(total);
+  var skipped = snapshot ? snapshot.prompts.filter(function (p) { return p.status === "low_quality"; }).length : 0;
+  $("c-skipped").textContent = skipped + " skipped";
+  $("streakn").textContent = String(snapshot ? computeStreak(snapshot.prompts) : 0);
+  if (popRing) {
+    var ring = $("ring");
+    ring.classList.remove("pulse");
+    void ring.offsetWidth;
+    ring.classList.add("pulse");
+  }
+}
+function resetMilestoneTracking(snap) {
+  // Called only at "fresh session" moments (boot/start/resume/finish) --
+  // seeds lastFracSeen at the session's ACTUAL current fraction so a
+  // resumed session already past 50% doesn't re-fire that milestone; only
+  // a genuinely new crossing fires from here on.
+  var frac = (snap && snap.total) ? snap.accepted / snap.total : 0;
+  lastFracSeen = frac;
+  milestonesFired = { 0.25: frac >= 0.25, 0.5: frac >= 0.5, 0.75: frac >= 0.75 };
+}
+function checkMilestoneFromSnapshot() {
+  // Reads the ALREADY-updated module-level `snapshot` -- must be called
+  // after `snapshot = snap;`, never before, or it compares stale data
+  // against itself.
+  if (!snapshot || !snapshot.total) { return; }
+  var frac = snapshot.accepted / snapshot.total;
+  var marks = [[0.25, "A quarter done"], [0.5, "Halfway there"], [0.75, "Three quarters done"]];
+  for (var i = 0; i < marks.length; i++) {
+    var m = marks[i];
+    if (lastFracSeen < m[0] && frac >= m[0] && !milestonesFired[m[0]]) {
+      milestonesFired[m[0]] = true;
+      var el = $("milestone");
+      el.textContent = m[1] + ". " + snapshot.accepted + " of " + snapshot.total + " sentences saved.";
+      el.classList.add("show");
+      renderHeader(true);
+      announce(m[1]);
+      setTimeout(function () { el.classList.remove("show"); }, 3500);
+      break;
+    }
+  }
+  lastFracSeen = frac;
+}
+
+/* ------------------------------------------------------------ tick rail */
+function renderRail(popId) {
+  var box = $("cells");
+  box.innerHTML = "";
+  if (!snapshot) { return; }
+  snapshot.prompts.forEach(function (p) {
+    var isCurrent = snapshot.current && snapshot.current.id === p.id;
+    var d = document.createElement("span");
+    d.className = "cell " + p.status + (isCurrent ? " current" : "");
+    d.title = "Sentence: " + p.status;
+    if (p.status === "accepted") {
+      d.innerHTML = svgTick();
+      d.querySelector("svg").style.color = "#fff";
+      if (p.id === popId) { d.classList.add("pop"); }
+    }
+    box.appendChild(d);
+  });
+}
+$("railbtn").addEventListener("click", function () {
+  var rail = $("rail");
+  var collapsed = rail.classList.toggle("collapsed");
+  this.textContent = collapsed ? "Show" : "Hide";
+  this.setAttribute("aria-expanded", String(!collapsed));
+  store("rail", collapsed ? "collapsed" : "open");
+});
+if (read("rail") === "collapsed") {
+  $("rail").classList.add("collapsed");
+  $("railbtn").textContent = "Show";
+  $("railbtn").setAttribute("aria-expanded", "false");
+}
+
+/* -------------------------------------------------------- theme + motion */
+var themeMode = read("theme") || "auto";
+function applyTheme() {
+  var v = themeMode;
+  if (v === "auto") {
+    v = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  document.documentElement.setAttribute("data-theme", v);
+  $("themebtn").textContent = "Theme: " + themeMode.charAt(0).toUpperCase() + themeMode.slice(1);
+}
+$("themebtn").addEventListener("click", function () {
+  themeMode = themeMode === "auto" ? "light" : themeMode === "light" ? "dark" : "auto";
+  store("theme", themeMode); applyTheme();
+});
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+applyTheme();
+
+var rmToggle = read("rm") === "on";
+function applyRM() {
+  document.body.classList.toggle("rm", rmToggle);
+  $("rmbtn").setAttribute("aria-pressed", String(rmToggle));
+}
+$("rmbtn").addEventListener("click", function () {
+  rmToggle = !rmToggle; store("rm", rmToggle ? "on" : "off"); applyRM();
+});
+applyRM();
+
+/* ------------------------------------------------------- state rendering */
+var stageEl = $("stage");
+function setStage(html, stepname) {
+  stageEl.classList.remove("advance");
+  void stageEl.offsetWidth;
+  stageEl.innerHTML = (stepname ? '<p class="stepname">' + esc(stepname) + "</p>" : "") + html;
+  stageEl.classList.add("advance");
+}
+
+function showWelcome() {
+  uiState = "welcome";
+  var resumeCard = "";
+  if (snapshot && snapshot.resumable) {
+    resumeCard =
+      '<button class="choice" id="ch-resume"><span>' +
+      "<b>Resume last session</b><small>Picks up exactly where the manifest left off.</small>" +
+      "</span><span class=\"kbd\">3</span></button>";
+  }
+  setStage(
+    "<h1>Teach SpeakEasy your voice</h1>" +
+    '<p class="lede">About ten minutes of reading builds a profile of how you speak. ' +
+    "Everything stays on this Mac, and the profile only switches on if it measurably " +
+    "improves your accuracy.</p>" +
+    '<div class="choices">' +
+    '<button class="choice primary" id="ch-quick"><span>' +
+    '<b>Quick session <span class="tag">Recommended</span></b>' +
+    "<small>20 sentences, about 10 minutes.</small></span><span class=\"kbd\">1</span></button>" +
+    '<button class="choice" id="ch-full"><span>' +
+    "<b>Full session</b><small>80 sentences, about 35 minutes. Best coverage.</small>" +
+    "</span><span class=\"kbd\">2</span></button>" +
+    resumeCard + "</div>",
+    "Start"
+  );
+  $("ch-quick").addEventListener("click", function () { startSession("quick"); });
+  $("ch-full").addEventListener("click", function () { startSession("full"); });
+  if (snapshot && snapshot.resumable) {
+    $("ch-resume").addEventListener("click", resumeSession);
+  }
+  renderHeader(false); renderRail(null);
+  announce("Welcome. Choose a session length.");
+}
+
+function applyStartResult(result) {
+  busy = false;
+  if (!result) { return; }
+  if (result.surface === "overlay") {
+    showBridgeError(new Error(
+      "The training window couldn't open" + (result.error ? " (" + result.error + ")" : "") +
+      " -- continuing in the menu-bar overlay instead."));
+    return;
+  }
+  if (result.started === false) {
+    showBridgeError(new Error(result.reason || "Nothing to resume."));
+    return;
+  }
+  applySnapshot(result);
+}
+
+function startSession(size) {
+  if (busy) { return; }
+  busy = true;
+  callBridge("training_wizard_start", { size: size }).then(applyStartResult).catch(function (err) {
+    busy = false; showBridgeError(err);
+  });
+}
+function resumeSession() {
+  if (busy) { return; }
+  busy = true;
+  callBridge("training_wizard_resume", {}).then(applyStartResult).catch(function (err) {
+    busy = false; showBridgeError(err);
+  });
+}
+
+function applySnapshot(snap) {
+  snapshot = snap;
+  resetMilestoneTracking(snap);
+  renderHeader(false); renderRail(null);
+  if (!snap.active) { showWelcome(); return; }
+  if (snap.current) { showPromptCard(snap.current); return; }
+  // Active but nothing current and no summary push has arrived yet (e.g.
+  // the very last prompt just got accepted synchronously inside this same
+  // call) -- fall back to welcome rather than show a stale card; the
+  // wizard_summary push (already in flight) will supersede this shortly.
+  showWelcome();
+}
+
+function showPromptCard(current) {
+  uiState = "prompt";
+  setStage(
+    '<span class="srcchip">' + esc(SRC_LABEL[current.source] || current.source) + "</span>" +
+    '<p class="sentence">&ldquo;' + esc(current.text) + "&rdquo;</p>" +
+    '<p class="lede">Read it naturally, at your normal pace.</p>' +
+    '<div class="actions">' +
+    '<button class="btn-primary" id="rec">Start recording <span style="opacity:.7">(Space)</span></button>' +
+    "</div>",
+    "Sentence " + ((snapshot.accepted + snapshot.prompts.filter(function (p) { return p.status === "low_quality"; }).length) + 1) +
+      " of " + snapshot.total
+  );
+  $("rec").addEventListener("click", toggleRecording);
+  renderRail(null); renderHeader(false);
+  announce(current.text);
+  $("rec").focus();
+}
+
+/* ------------------------------------------------------------ recording */
+function renderLevelBars(levels) {
+  var arr = levels || [0.15, 0.15, 0.15, 0.15, 0.15];
+  var box = $("levelbars");
+  if (box) {
+    box.innerHTML = "";
+    arr.forEach(function (v) {
+      var bar = document.createElement("div");
+      bar.className = "bar";
+      bar.style.height = Math.max(3, Math.round(v * 72)) + "px";
+      box.appendChild(bar);
+    });
+  }
+  // Reduced-motion fallback (spec item 10): a discrete, stepwise-updated
+  // level readout instead of the bar animation -- word choice derived
+  // from the SAME real pushed levels, never fabricated.
+  var rm = $("rmlevel");
+  if (rm) {
+    var avg = arr.reduce(function (a, b) { return a + b; }, 0) / arr.length;
+    var word = !levels ? "measuring" : avg <= 0.16 ? "quiet" : avg >= 0.85 ? "peaking" : "good";
+    rm.textContent = "Recording. Level: " + word;
+  }
+}
+function showRecordingCard(current) {
+  uiState = "recording";
+  setStage(
+    '<p class="sentence" style="font-size:clamp(1.1em,3vw,1.3em)">&ldquo;' + esc(current.text) + "&rdquo;</p>" +
+    '<div class="wavebox"><div class="levelbars" id="levelbars"></div>' +
+    '<div class="rm-level" id="rmlevel">Recording. Level: measuring</div></div>' +
+    '<div class="recrow"><span class="livedot">&#9679; Recording</span></div>' +
+    '<div class="actions"><button class="btn-primary" id="stop">Stop ' +
+    '<span style="opacity:.7">(Space)</span></button></div>',
+    "Sentence " + ((snapshot.accepted + snapshot.prompts.filter(function (p) { return p.status === "low_quality"; }).length) + 1) +
+      " of " + snapshot.total
+  );
+  renderLevelBars(null);
+  $("stop").addEventListener("click", toggleRecording);
+  $("stop").focus();
+  announce("Recording started.");
+}
+function toggleRecording() {
+  if (busy) { return; }
+  busy = true;
+  callBridge("training_wizard_toggle", {}).then(function (result) {
+    busy = false;
+    if (!result || result.ok === false) { showBridgeError(new Error((result && result.error) || "toggle failed")); return; }
+    if (result.state === "recording" && snapshot && snapshot.current) {
+      showRecordingCard(snapshot.current);
+    }
+    // Any other resulting state (idle/reviewing) is driven entirely by the
+    // subsequent wizard_qc_failure/wizard_review/wizard_prompt/
+    // wizard_summary push, never by this return value.
+  }).catch(function (err) { busy = false; showBridgeError(err); });
+}
+
+/* --------------------------------------------------------------- review */
+function showReview(payload) {
+  uiState = "review";
+  var qc = payload.qc || {};
+  setStage(
+    "<h1>How does it sound?</h1>" +
+    '<p class="lede">Quality check passed (' + (payload.seconds || 0).toFixed(1) + "s clip). " +
+    "Keep it or record it again.</p>" +
+    '<p class="sentence" style="font-size:clamp(1.1em,3vw,1.3em)">&ldquo;' + esc(payload.text) + "&rdquo;</p>" +
+    '<div class="actions" style="margin-bottom:4px">' +
+    '<button class="btn-secondary" id="play">&#9654; Play back (P)</button></div>' +
+    '<span class="qcfacts">' +
+    "<span><b>" + svgTick() + "</b> Loudness OK (" + (typeof qc.rms_dbfs === "number" ? qc.rms_dbfs.toFixed(1) : "?") + " dBFS)</span>" +
+    "<span><b>" + svgTick() + "</b> Low noise (" + (typeof qc.snr_db === "number" ? qc.snr_db.toFixed(0) : "?") + " dB SNR)</span>" +
+    "<span><b>" + svgTick() + "</b> Voiced " + (typeof qc.silence_ratio === "number" ? Math.round(qc.silence_ratio * 100) : "?") + "%</span>" +
+    "</span>" +
+    '<div class="actions">' +
+    '<button class="btn-primary" id="accept">Accept take <span style="opacity:.7">(Enter)</span></button>' +
+    '<button class="btn-secondary" id="retake">Re-record (R)</button></div>' +
+    '<p class="lede" style="font-size:.8em;margin-top:12px">Accepting saves this clip into your ' +
+    "training corpus. Re-recording does not count against the three quality-check tries.</p>",
+    "Review"
+  );
+  $("accept").addEventListener("click", acceptTake);
+  $("retake").addEventListener("click", retakeTake);
+  $("play").addEventListener("click", playTake);
+  $("accept").focus();
+  announce("Quality check passed. Review your take: accept, play it back, or re-record.");
+}
+function playTake() {
+  // Fire-and-forget: playback doesn't change wizard state (no busy guard,
+  // doesn't block accept/retake), and a repeated click restarts rather
+  // than overlaps -- the training_wizard_play_review handler calls
+  // sounddevice.stop() before play() for exactly that determinism.
+  callBridge("training_wizard_play_review", {}).catch(function (err) { showBridgeError(err); });
+}
+function acceptTake() {
+  if (busy) { return; }
+  busy = true;
+  callBridge("training_wizard_accept", {}).then(function (result) {
+    busy = false;
+    if (!result || result.ok === false) { showBridgeError(new Error((result && result.error) || "accept failed")); }
+    // UI transition comes from the next wizard_prompt/wizard_summary push.
+  }).catch(function (err) { busy = false; showBridgeError(err); });
+}
+function retakeTake() {
+  if (busy) { return; }
+  busy = true;
+  callBridge("training_wizard_retake", {}).then(function (result) {
+    busy = false;
+    if (!result || result.ok === false) { showBridgeError(new Error((result && result.error) || "retake failed")); }
+    // UI transition comes from the next wizard_prompt push.
+  }).catch(function (err) { busy = false; showBridgeError(err); });
+}
+
+/* -------------------------------------------------- QC failure and skip */
+var QC_COPY = {
+  quiet: {
+    word: "A bit quiet", what: "The take came in under the loudness floor.",
+    why: "Quiet clips teach the profile less about how you actually sound.",
+    next: "One more try, a little closer to the mic?"
+  },
+  clipping: {
+    word: "Peaked too loud", what: "The signal hit full scale and clipped.",
+    why: "Clipped audio distorts the sounds the profile learns from.",
+    next: "Try again with a touch more distance, or lower the input level."
+  },
+  noisy: {
+    word: "Background noise", what: "Noise level was high relative to your voice.",
+    why: "The profile could learn the noise instead of you.",
+    next: "A quieter moment or a closer mic will fix it."
+  },
+  silence: {
+    word: "Mostly silence", what: "We heard voice in less than 40% of the clip.",
+    why: "The trainer needs the sentence, not the pause around it.",
+    next: "Start speaking right after you press record."
+  }
+};
+function pipsHTML(used, max) {
+  var out = '<div class="pips" aria-label="Tries used: ' + used + " of " + max + '">';
+  for (var i = 0; i < max; i++) {
+    out += '<span class="pip' + (i < used ? " used" : "") + '"></span>';
+  }
+  var left = Math.max(0, max - used);
+  return out + '<span style="font-size:.78em;color:var(--ink2)">no rush, ' +
+    left + (left === 1 ? " try" : " tries") + " left</span></div>";
+}
+var qcFailExhausted = false;
+function qcFailPrimaryAction() {
+  if (qcFailExhausted) {
+    // This prompt is now skipped for the rest of the run and the flow has
+    // already advanced internally -- show the (different) next prompt's
+    // text before recording it, never record blind. `snapshot` was
+    // already refreshed by showQcFail's own get_state call.
+    if (snapshot && snapshot.current) { showPromptCard(snapshot.current); }
+    else { showWelcome(); }
+  } else {
+    // Same sentence, attempts remain: the user just read it, so jump
+    // straight back into recording (matches the mockup's "Try again").
+    toggleRecording();
+  }
+}
+function showQcFail(payload) {
+  uiState = "qcfail";
+  var c = QC_COPY[payload.reason] || {
+    word: "Clip rejected", what: "The take did not pass the quality check (" + esc(payload.reason) + ").",
+    why: "A clean clip teaches the profile more than a noisy one.", next: "Try again?"
+  };
+  qcFailExhausted = payload.attempts >= payload.max_attempts;
+  setStage(
+    '<p><span class="statusword warn">&#9650; ' + esc(c.word) + "</span></p>" +
+    '<ul class="wwn">' +
+    '<li><span class="k">What</span><span>' + esc(c.what) + "</span></li>" +
+    '<li><span class="k">Why</span><span>' + esc(c.why) + "</span></li>" +
+    '<li><span class="k">Next</span><span>' +
+    (qcFailExhausted
+      ? "That one is skipped for now, no harm done -- we'll offer it again next session."
+      : esc(c.next)) +
+    "</span></li></ul>" +
+    pipsHTML(payload.attempts, payload.max_attempts) +
+    '<div class="actions"><button class="btn-primary" id="again">' +
+    (qcFailExhausted ? "Next sentence" : "Try again") +
+    ' <span style="opacity:.7">(Space)</span></button></div>',
+    "Quality check"
+  );
+  $("again").addEventListener("click", qcFailPrimaryAction);
+  $("again").focus();
+  announce(c.word + (qcFailExhausted ? ". Skipped for now." : ". " + c.next));
+}
+
+/* --------------------------------------------------------------- summary */
+function showSummary(payload) {
+  uiState = "summary";
+  var summary = payload.summary || {};
+  var prompts = payload.prompts || [];
+  var trainN = prompts.filter(function (p) { return p.status === "accepted" && p.split === "train"; }).length;
+  var evalN = prompts.filter(function (p) { return p.status === "accepted" && p.split === "eval"; }).length;
+  var rows = prompts.map(function (p, i) {
+    return "<tr><td>" + (i + 1) + "</td><td>" + esc(p.source) + "</td><td>" + esc(p.status) +
+      "</td><td>" + p.attempts + "</td><td>" + esc(p.split) + "</td></tr>";
+  }).join("");
+  setStage(
+    '<div style="display:flex;align-items:center;gap:14px">' +
+    '<span class="celebratetick pop">' + svgTick() + "</span>" +
+    "<h1 style=\"margin:0\">Session complete</h1></div>" +
+    '<div class="facts">' +
+    '<div class="fact"><b>' + (summary.n_clips || 0) + "</b><small>clips accepted</small></div>" +
+    '<div class="fact"><b>' + (summary.n_rejected || 0) + "</b><small>skipped (offered again next session)</small></div>" +
+    '<div class="fact"><b>' + (summary.est_minutes || 0) + " min</b><small>of your voice recorded</small></div>" +
+    '<div class="fact"><b>' + trainN + " / " + evalN +
+    "</b><small>train / held-out eval clips</small></div></div>" +
+    '<p class="lede">These clips now feed the profile builder. The new profile is benchmarked ' +
+    "against your current setup and <b>only activates if it measurably improves accuracy</b> " +
+    "without slowing you down. Nothing ever leaves this Mac.</p>" +
+    '<div class="actions"><button class="btn-primary" id="finish">Finish</button>' +
+    '<button class="btn-secondary" id="printbtn">Print summary</button></div>' +
+    '<details class="evidence"><summary>Per-sentence details</summary>' +
+    '<table class="evlist"><thead><tr><th>#</th><th>Source</th><th>Status</th>' +
+    "<th>QC tries</th><th>Split</th></tr></thead><tbody>" + rows +
+    "</tbody></table></details>",
+    "Done"
+  );
+  $("finish").addEventListener("click", function () {
+    callBridge("training_wizard_get_state", {}).then(applySnapshot).catch(showWelcome);
+  });
+  $("printbtn").addEventListener("click", function () { window.print(); });
+  $("finish").focus();
+  announce("Session complete. " + (summary.n_clips || 0) + " clips accepted, " + (summary.n_rejected || 0) + " skipped.");
+}
+
+/* ---------------------------------------------------------- bridge error */
+function showBridgeError(err) {
+  uiState = "error";
+  var msg = (err && err.message) || String(err);
+  setStage(
+    '<p><span class="statusword bad">&#9632; Something went wrong</span></p>' +
+    '<p class="lede">' + esc(msg) + "</p>" +
+    '<div class="actions"><button class="btn-primary" id="retryerr">Try again</button></div>',
+    "Training wizard"
+  );
+  $("retryerr").addEventListener("click", boot);
+  announce(msg);
+}
+
+/* ---------------------------------------------------------- push wiring */
+function refreshAndRenderPrompt() {
+  var prevPrompts = snapshot ? snapshot.prompts : [];
+  var prevAccepted = snapshot ? snapshot.accepted : 0;
+  callBridge("training_wizard_get_state", {}).then(function (snap) {
+    var prevById = {};
+    prevPrompts.forEach(function (p) { prevById[p.id] = p.status; });
+    var poppedId = null;
+    snap.prompts.forEach(function (p) {
+      if (p.status === "accepted" && prevById[p.id] !== "accepted") { poppedId = p.id; }
+    });
+    var popRing = snap.accepted > prevAccepted;
+    snapshot = snap;
+    renderHeader(popRing); renderRail(poppedId);
+    checkMilestoneFromSnapshot();
+    // Don't clobber a qc-failure card the user hasn't acted on yet -- its
+    // own handler already refreshed `snapshot` for the "Try again"/"Next
+    // sentence" button to use once clicked.
+    if (uiState === "qcfail") { return; }
+    if (snap.current) { showPromptCard(snap.current); }
+    else if (!snap.active) { showWelcome(); }
+  }).catch(showBridgeError);
+}
+
+window.onBridgePush("wizard_prompt", function () {
+  refreshAndRenderPrompt();
+});
+
+window.onBridgePush("wizard_qc_failure", function (payload) {
+  callBridge("training_wizard_get_state", {}).then(function (snap) {
+    snapshot = snap;
+    renderHeader(false); renderRail(null);
+    showQcFail(payload);
+  }).catch(showBridgeError);
+});
+
+window.onBridgePush("wizard_review", function (payload) {
+  showReview(payload);
+});
+
+window.onBridgePush("wizard_summary", function (payload) {
+  // The session is complete (controller.training already cleared
+  // server-side by the time this fires) -- build the final header/rail
+  // state directly from the summary push's own real per-prompt data
+  // rather than a stale `snapshot`. No new milestone check needed here:
+  // marks only go up to 75%, already handled by the last wizard_prompt
+  // push before completion.
+  var prompts = payload.prompts || [];
+  var accepted = prompts.filter(function (p) { return p.status === "accepted"; }).length;
+  snapshot = { active: false, state: null, prompts: prompts, accepted: accepted,
+               total: prompts.length, current: null, resumable: false };
+  renderHeader(true); renderRail(null);
+  showSummary(payload);
+});
+
+window.onBridgePush("wizard_level", function (payload) {
+  if (uiState === "recording") { renderLevelBars(payload.levels); }
+});
+
+/* ------------------------------------------------------------- keyboard */
+document.addEventListener("keydown", function (e) {
+  if (busy) { return; }
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") { return; }
+  if (e.key === " ") {
+    if (uiState === "prompt" || uiState === "recording") {
+      e.preventDefault(); toggleRecording();
+    } else if (uiState === "qcfail") {
+      e.preventDefault(); qcFailPrimaryAction();
+    }
+  } else if (e.key === "Enter") {
+    if (uiState === "review" && document.activeElement.tagName !== "BUTTON") {
+      e.preventDefault(); acceptTake();
+    }
+  } else if (e.key === "r" || e.key === "R") {
+    if (uiState === "review") { e.preventDefault(); retakeTake(); }
+  } else if (e.key === "p" || e.key === "P") {
+    if (uiState === "review") { e.preventDefault(); playTake(); }
+  } else if (uiState === "welcome") {
+    if (e.key === "1") { startSession("quick"); }
+    else if (e.key === "2") { startSession("full"); }
+    else if (e.key === "3" && snapshot && snapshot.resumable) { resumeSession(); }
+  }
+});
+
+/* ----------------------------------------------------------------- boot */
+function boot() {
+  uiState = "boot";
+  callBridge("training_wizard_get_state", {}).then(applySnapshot).catch(showBridgeError);
+}
+boot();
+})();
+</script>
+</body>
+</html>
